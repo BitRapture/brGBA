@@ -3,6 +3,8 @@
 
 namespace br::gba
 {
+    class bus;
+
     class cpu
     {
     public:
@@ -10,15 +12,17 @@ namespace br::gba
         void cycle();
 
     private:
-        /// @brief decode and run 32-bit arm instruction
+        /// @brief decode 32-bit arm instruction
         void decode_arm_instruction();
-        /// @brief decode and run 16-bit thumb instruction
-        void decode_thumb_instruction();
+        /// @brief decode 16-bit thumb instruction
+        void decode_thumb_instruction();   
 
         /// @brief get registers 0 - 15
         /// @param _index register index
         /// @return register by reference
         u32& get_register(const u32& _index);
+
+        const bool check_condition(const u32& _code);
 
     private:
         // general purpose registers 0 - 7
@@ -40,17 +44,19 @@ namespace br::gba
         u32 statusRegister;
 
     private:
-        // cpu state, either arm or thumb
-        bool isArmMode;
-        // amount of cycles to "wait" whilst executing instructions
-        u32 cycleStallCount;
-        // amount of cycles to "wait" during non-sequential mode
-        u32 cycleNonSeqStallCount;
-        // amount of cycles to "wait" during sequential mode
-        u32 cycleSeqStallCount;
         // either 0, or 5 for fiq banked registers
         u32 armRegisterOffset;
         // used for link and stack pointer banked registers
         u32 bankedRegisterOffset;
+
+    private:
+        // cpu state, either arm or thumb
+        bool isArmMode;
+
+    private:
+        bus& addressBus;
+
+    public:
+        cpu(bus& _addressBus);
     };
 }

@@ -6,7 +6,9 @@ include_directories(
 )
 
 add_library(brgbacore
-    
+    core/src/bus.cpp
+    core/src/cpu.cpp    
+
     core/include/gba_core.h
 )
 add_executable(brgbatest
