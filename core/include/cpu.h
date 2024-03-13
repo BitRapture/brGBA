@@ -1,28 +1,61 @@
 #pragma once
 #include "typedefs.h"
+#include "constants.h"
+#include <functional>
+#include <array>
+#include <string>
 
 namespace br::gba
 {
     class bus;
 
+    struct cpu_instruction
+    {
+        u32 data_mask;
+        u32 data_test;
+        std::function<const u32(const u32&)> execute;
+    };
+
     class cpu
     {
     public:
-        /// @brief Step the cpu
-        void cycle();
+        /// @brief step the cpu
+        /// @return cycle count
+        const u32 cycle();
+
+        /// @brief cycle cpu with an instruction, for debug purposes
+        /// @param _instruction instruction to test
+        /// @return cycle count
+        const u32 debug_cycle_instruction(const u32& _instruction);
+
+        /// @brief print status information of the cpu, for debug purposes
+        /// @return formatted status information
+        const std::string debug_print_status();
 
     private:
         /// @brief decode 32-bit arm instruction
-        void decode_arm_instruction();
+        /// @return cycle count
+        const u32 decode_arm_instruction();
         /// @brief decode 16-bit thumb instruction
-        void decode_thumb_instruction();   
+        /// @return cycle count
+        const u32 decode_thumb_instruction();   
 
         /// @brief get registers 0 - 15
         /// @param _index register index
         /// @return register by reference
         u32& get_register(const u32& _index);
-
+        
+        /// @brief check condition from opcode
+        /// @param _code condition masked opcode
+        /// @return true if opcode can be ran
         const bool check_condition(const u32& _code);
+
+    private:
+        const u32 arm_dataproc(const u32& _opcode);
+
+    private:
+        /// @brief setup the armISA instruction map
+        void create_arm_isa();
 
     private:
         // general purpose registers 0 - 7
@@ -49,11 +82,10 @@ namespace br::gba
         // used for link and stack pointer banked registers
         u32 bankedRegisterOffset;
 
+        // arm instruction set array
+        std::array<cpu_instruction, ARM_ISA_COUNT> armISA;
     private:
-        // cpu state, either arm or thumb
-        bool isArmMode;
-
-    private:
+        // connection to gba bus for memory reading and writing
         bus& addressBus;
 
     public:
