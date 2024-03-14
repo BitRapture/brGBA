@@ -57,6 +57,9 @@ namespace br::gba
         /// @brief setup the armISA instruction map
         void create_arm_isa();
 
+        /// @brief reset all registers to zero
+        void reset_registers();
+
     private:
         // general purpose registers 0 - 7
         u32 thumbRegisters[8];

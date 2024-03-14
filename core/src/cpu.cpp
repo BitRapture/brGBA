@@ -1,12 +1,14 @@
 #include "../include/cpu.h"
 #include "../include/bus.h"
 #include "../include/constants.h"
+#include <sstream>
+#include <iomanip>
 
 namespace br::gba
 {
     const u32 cpu::cycle()
     {
-        if (get_bit(statusRegister, STATUS_REGISTER_T))
+        if (get_bit_bool(statusRegister, STATUS_REGISTER_T))
             return decode_arm_instruction();
         else
             return decode_thumb_instruction();
@@ -27,14 +29,17 @@ namespace br::gba
 
     const std::string cpu::debug_print_status()
     {
-        std::string statusInfo = "";
+        std::stringstream statusInfo;
 
         for (u32 i = 0; i <= 0xF; ++i)
         {
-            statusInfo += "Register " + std::to_string(i) + ": " + std::to_string(get_register(i)) + "\n";
+            statusInfo << "Register " + std::to_string(i) + ": 0x";
+            statusInfo << std::setfill('0') << std::setw(8) << std::hex << get_register(i);
+            statusInfo << '\n';
         }
+        statusInfo << "CSPR: " << std::setfill('0') << std::setw(8) << std::hex << statusRegister;
 
-        return statusInfo;
+        return statusInfo.str();
     }
 
     const u32 cpu::decode_arm_instruction()
@@ -97,33 +102,33 @@ namespace br::gba
         switch (_code)
         {
         case 0: // EQ
-            return get_bit(statusRegister, STATUS_REGISTER_Z);
+            return get_bit_bool(statusRegister, STATUS_REGISTER_Z);
         case 1: // NE
-            return get_not_bit(statusRegister, STATUS_REGISTER_Z);
+            return get_not_bit_bool(statusRegister, STATUS_REGISTER_Z);
         case 2: // CS/HS
-            return get_bit(statusRegister, STATUS_REGISTER_C);
+            return get_bit_bool(statusRegister, STATUS_REGISTER_C);
         case 3: // CC/LO
-            return get_not_bit(statusRegister, STATUS_REGISTER_C);
+            return get_not_bit_bool(statusRegister, STATUS_REGISTER_C);
         case 4: // MI
-            return get_bit(statusRegister, STATUS_REGISTER_N);
+            return get_bit_bool(statusRegister, STATUS_REGISTER_N);
         case 5: // PL
-            return get_not_bit(statusRegister, STATUS_REGISTER_N);
+            return get_not_bit_bool(statusRegister, STATUS_REGISTER_N);
         case 6: // VS
-            return get_bit(statusRegister, STATUS_REGISTER_V);
+            return get_bit_bool(statusRegister, STATUS_REGISTER_V);
         case 7: // VC
-            return get_not_bit(statusRegister, STATUS_REGISTER_V);
+            return get_not_bit_bool(statusRegister, STATUS_REGISTER_V);
         case 8: // HI
-            return get_bit(statusRegister, STATUS_REGISTER_C) && get_not_bit(statusRegister, STATUS_REGISTER_Z);
+            return get_bit_bool(statusRegister, STATUS_REGISTER_C) && get_not_bit_bool(statusRegister, STATUS_REGISTER_Z);
         case 9: // LS
-            return get_not_bit(statusRegister, STATUS_REGISTER_C) || get_bit(statusRegister, STATUS_REGISTER_Z);
+            return get_not_bit_bool(statusRegister, STATUS_REGISTER_C) || get_bit_bool(statusRegister, STATUS_REGISTER_Z);
         case 10: // GE
-            return get_not_bit(statusRegister, STATUS_REGISTER_N) == get_not_bit(statusRegister, STATUS_REGISTER_V);
+            return get_not_bit_bool(statusRegister, STATUS_REGISTER_N) == get_not_bit_bool(statusRegister, STATUS_REGISTER_V);
         case 11: // LT
-            return get_not_bit(statusRegister, STATUS_REGISTER_N) != get_not_bit(statusRegister, STATUS_REGISTER_V);
+            return get_not_bit_bool(statusRegister, STATUS_REGISTER_N) != get_not_bit_bool(statusRegister, STATUS_REGISTER_V);
         case 12: // GT
-            return get_not_bit(statusRegister, STATUS_REGISTER_Z) && (get_not_bit(statusRegister, STATUS_REGISTER_N) == get_not_bit(statusRegister, STATUS_REGISTER_V));
+            return get_not_bit_bool(statusRegister, STATUS_REGISTER_Z) && (get_not_bit_bool(statusRegister, STATUS_REGISTER_N) == get_not_bit_bool(statusRegister, STATUS_REGISTER_V));
         case 13: // LE
-            return get_bit(statusRegister, STATUS_REGISTER_Z) && (get_not_bit(statusRegister, STATUS_REGISTER_N) != get_not_bit(statusRegister, STATUS_REGISTER_V));
+            return get_bit_bool(statusRegister, STATUS_REGISTER_Z) && (get_not_bit_bool(statusRegister, STATUS_REGISTER_N) != get_not_bit_bool(statusRegister, STATUS_REGISTER_V));
         case 14: // AL
             return true;
         case 15: // NV
@@ -135,8 +140,8 @@ namespace br::gba
 
     const u32 cpu::arm_dataproc(const u32& _opcode)
     {
-        bool isImmediate = get_bit(_opcode, 1 << 25);
-        bool setConditions = get_bit(_opcode, 1 << 20);
+        bool isImmediate = get_bit_bool(_opcode, 1 << 25);
+        bool setStatus = get_bit_bool(_opcode, 1 << 20);
 
         u32 dataOpcode = (_opcode >> 21) & 0b1111;
         u32& regN = get_register((_opcode >> 16) & 0b1111);
@@ -154,7 +159,7 @@ namespace br::gba
         }
         else
         {
-            bool shiftRegister = get_bit(_opcode, 1 << 4);
+            bool shiftRegister = get_bit_bool(_opcode, 1 << 4);
             bool zeroShift = false;
             bool zeroShiftRegister = false;
             u32 shiftType = (_opcode >> 5) & 0b11;
@@ -198,7 +203,7 @@ namespace br::gba
                 if (zeroShift) // RCR
                 {
                     operand >>= 1;
-                    operand |= (u32)get_bit(statusRegister, STATUS_REGISTER_C) >> 31;
+                    operand |= (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) << 31;
                 }
                 else
                 {
@@ -206,69 +211,115 @@ namespace br::gba
                 }
                 break;
             }
+
+            if (zeroShiftRegister)
+                carry = 0;
         }
 
+        bool setRegister = false;
+        bool isLogical = false;
+        u32 result = 0;
         u32 overflow = 0;
-        u32 zero = 0;
-        u32 sign = 0;
         switch (dataOpcode)
         {
         case 0x0: // AND
-            regD = regN & operand;
+            result = regN & operand;
+            setRegister = true;
+            isLogical = true;
             break;
         case 0x1: // EOR
-            regD = regN ^ operand;
+            result = regN ^ operand;
+            setRegister = true;
+            isLogical = true;
             break;
         case 0x2: // SUB
-            regD = regN - operand;
+            result = regN - operand;
+            overflow = test_overflow_neg(regN, operand);
+            carry = test_carry_neg(regN, operand);
+            setRegister = true;
             break;
         case 0x3: // RSB
-            regD = operand - regN;
+            result = operand - regN;
+            overflow = test_overflow_neg(operand, regN);
+            carry = test_carry_neg(operand, regN);
+            setRegister = true;
             break;
         case 0x4: // ADD
-            regD = regN + operand;
+            result = regN + operand;
+            overflow = test_overflow_pos(regN, operand);
+            carry = test_carry_pos(regN, operand);
+            setRegister = true;
             break;
         case 0x5: // ADC
-            regD = regN + operand + ((u32)get_bit(statusRegister, STATUS_REGISTER_C) >> 31);
+            result = regN + operand + (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C);
+            overflow = test_overflow_pos(regN, operand) || test_overflow_pos(regN + operand, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C));
+            carry = test_carry_pos(regN, operand) || test_carry_pos(regN + operand, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C));
+            setRegister = true;
             break;
         case 0x6: // SBC
-            regD = regN - operand + ((u32)get_bit(statusRegister, STATUS_REGISTER_C) >> 31) - 1;
+            result = regN - operand + (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) - 1;
+            overflow = test_overflow_neg(regN, operand) || test_overflow_neg(regN - operand, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) - 1);
+            carry = test_carry_neg(regN, operand) || test_carry_neg(regN - operand, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) - 1);
+            setRegister = true;
             break;
         case 0x7: // RSC
-            regD = operand - regN + ((u32)get_bit(statusRegister, STATUS_REGISTER_C) >> 31) - 1;
+            result = operand - regN + (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) - 1;
+            overflow = test_overflow_neg(operand, regN) || test_overflow_neg(operand - regN, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) - 1);
+            carry = test_carry_neg(operand, regN) || test_carry_neg(operand - regN, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) - 1);
+            setRegister = true;
             break;
         case 0x8: // TST
-            {
-                u32 result = regN & operand;
-            }
+            result = regN & operand;
+            isLogical = true;
             break;
         case 0x9: // TEQ
-            {
-                u32 result = regN ^ operand;
-            }
+            result = regN ^ operand;
+            isLogical = true;
             break;
         case 0xA: // CMP
-            {
-                u32 result = regN - operand;
-            }
+            result = regN - operand;
+            overflow = test_overflow_neg(regN, operand);
+            carry = test_carry_neg(regN, operand);
+            isLogical = true;
             break;
         case 0xB: // CMN
-            {
-                u32 result = regN + operand;
-            }
+            result = regN + operand;
+            overflow = test_overflow_pos(regN, operand);
+            carry = test_carry_pos(regN, operand);
+            isLogical = true;
             break;
         case 0xC: // ORR
-            regD = regN | operand;
+            result = regN | operand;
+            setRegister = true;
+            isLogical = true;
             break;
         case 0xD: // MOV
-            regD = operand;
+            result = operand;
+            setRegister = true;
+            isLogical = true;
             break;
         case 0xE: // BIC
-            regD = regN & ~operand;
+            result = regN & ~operand;
+            setRegister = true;
+            isLogical = true;
             break;
         case 0xF: // MVN
-            regD = ~operand;
+            result = ~operand;
+            setRegister = true;
+            isLogical = true;
             break;
+        }
+
+        if (setRegister)
+            regD = result;
+
+        if (setStatus)
+        {
+            if (!isLogical)
+                set_bit(statusRegister, STATUS_REGISTER_V_SHIFT, overflow);
+            set_bit(statusRegister, STATUS_REGISTER_C_SHIFT, carry);
+            set_bit(statusRegister, STATUS_REGISTER_Z_SHIFT, result == 0);
+            set_bit(statusRegister, STATUS_REGISTER_N_SHIFT, result >> 31);
         }
 
         return 0;
@@ -281,10 +332,29 @@ namespace br::gba
         armISA[2] = { ARM_DATAPROC_3_MASK, ARM_DATAPROC_3_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1) };
     }
 
+    void cpu::reset_registers()
+    {
+        for (u32 i = 0; i < 8; ++i)
+            thumbRegisters[i] = 0;
+
+        for (u32 i = 0; i < 10; ++i)
+            armRegisters[i] = 0;
+
+        for (u32 i = 0; i < 6; ++i)
+        {
+            stackPointers[i] = 0;
+            linkRegisters[i] = 0;
+        }
+
+        for (u32 i = 0; i < 5; ++i)
+            savedStatusRegisters[i] = 0;
+    }
+
     cpu::cpu(bus& _addressBus)
         : addressBus{ _addressBus },
         bankedRegisterOffset{ 0 }, armRegisterOffset{ 0 }
     {
+        reset_registers();
         create_arm_isa();
     }
 }
