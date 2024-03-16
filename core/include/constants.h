@@ -27,12 +27,26 @@ namespace br::gba
 
     inline constexpr bool test_overflow_pos(const u32& _x, const u32& _y)
     {
-        return (s32)_x > 0 && (s32)_y > INT32_MAX - (s32)_x;
+        s64 temp = (s64)_x + (s64)_y; 
+        return temp < INT32_MIN || temp > INT32_MAX;
     }
 
     inline constexpr bool test_overflow_neg(const u32& _x, const u32& _y)
     {
-        return (s32)_x < 0 && (s32)_y > INT32_MAX + (s32)_x;
+        s64 temp = (s64)_x - (s64)_y; 
+        return temp < INT32_MIN || temp > INT32_MAX;
+    }
+
+    inline constexpr bool test_overflow_pos(const u32& _x, const u32& _y, const u32& _carry)
+    {
+        s64 temp = (s64)_x + (s64)_y + (s64)_carry; 
+        return temp < INT32_MIN || temp > INT32_MAX;
+    }
+
+    inline constexpr bool test_overflow_neg(const u32& _x, const u32& _y, const u32& _carry)
+    {
+        s64 temp = (s64)_x - (s64)_y + (s64)_carry - 1; 
+        return temp < INT32_MIN || temp > INT32_MAX;
     }
 
     inline constexpr bool test_carry_pos(const u32& _x, const u32& _y)
@@ -44,6 +58,18 @@ namespace br::gba
     inline constexpr bool test_carry_neg(const u32& _x, const u32& _y)
     {
         u64 temp = (u64)_x - (u64)_y;
+        return temp > UINT32_MAX;
+    }
+
+    inline constexpr bool test_carry_pos(const u32& _x, const u32& _y, const u32& _carry)
+    {
+        u64 temp = (u64)_x + (u64)_y + (u64)_carry;
+        return temp > UINT32_MAX;        
+    }
+
+    inline constexpr bool test_carry_neg(const u32& _x, const u32& _y, const u32& _carry)
+    {
+        u64 temp = (u64)_x - (u64)_y + (u64)_carry - 1;
         return temp > UINT32_MAX;
     }
 

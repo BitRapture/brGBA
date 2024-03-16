@@ -252,20 +252,20 @@ namespace br::gba
             break;
         case 0x5: // ADC
             result = regN + operand + (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C);
-            overflow = test_overflow_pos(regN, operand) || test_overflow_pos(regN + operand, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C));
-            carry = test_carry_pos(regN, operand) || test_carry_pos(regN + operand, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C));
+            overflow = test_overflow_pos(regN, operand, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C));
+            carry = test_carry_pos(regN, operand, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C));
             setRegister = true;
             break;
         case 0x6: // SBC
             result = regN - operand + (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) - 1;
-            overflow = test_overflow_neg(regN, operand) || test_overflow_neg(regN - operand, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) - 1);
-            carry = test_carry_neg(regN, operand) || test_carry_neg(regN - operand, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) - 1);
+            overflow = test_overflow_neg(regN, operand, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C));
+            carry = test_carry_neg(regN, operand, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C));
             setRegister = true;
             break;
         case 0x7: // RSC
             result = operand - regN + (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) - 1;
-            overflow = test_overflow_neg(operand, regN) || test_overflow_neg(operand - regN, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) - 1);
-            carry = test_carry_neg(operand, regN) || test_carry_neg(operand - regN, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) - 1);
+            overflow = test_overflow_neg(operand, regN, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C));
+            carry = test_carry_neg(operand, regN, (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C));
             setRegister = true;
             break;
         case 0x8: // TST
