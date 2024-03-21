@@ -37,7 +37,7 @@ namespace br::gba
             statusInfo << std::setfill('0') << std::setw(8) << std::hex << get_register(i);
             statusInfo << '\n';
         }
-        statusInfo << "CSPR: " << std::setfill('0') << std::setw(8) << std::hex << statusRegister;
+        statusInfo << "CSPR: " << std::setfill('0') << std::setw(8) << std::hex << statusRegister << '\n';
 
         return statusInfo.str();
     }
@@ -144,7 +144,7 @@ namespace br::gba
         bool setStatus = get_bit_bool(_opcode, 1 << 20);
 
         u32 dataOpcode = (_opcode >> 21) & 0b1111;
-        u32& regN = get_register((_opcode >> 16) & 0b1111);
+        u32 regN = get_register((_opcode >> 16) & 0b1111);
         u32& regD = get_register((_opcode >> 12) & 0b1111);
 
         u32 operand = 0;
@@ -325,11 +325,48 @@ namespace br::gba
         return 0;
     }
 
+    const u32 cpu::arm_branch(const u32& _opcode)
+    {
+        if (!check_condition(_opcode >> 28))
+            return 0;
+
+        bool setLink = get_bit_bool(_opcode, 1 << 24);
+        s32 offset = (s32)(_opcode & 0xFFFFFF) * 4;
+
+        programCounter += 8 + offset;
+
+        if (setLink)
+            get_register(REGISTER_LINK_INDEX) = programCounter + 4;
+
+        return 0;
+    }
+
+    const u32 cpu::arm_branchex(const u32& _opcode)
+    {
+        u32 branchType = (_opcode >> 4) & 0b1111;
+        u32 regN = get_register(_opcode & 0b1111);
+
+        // ARMv4 only supports BX (switch to THUMB mode)
+        if (branchType == 0b0001)
+        {
+            bool thumbMode = regN & 1;
+            
+            set_bit(statusRegister, STATUS_REGISTER_T_SHIFT, thumbMode);
+            
+            if (thumbMode)
+                programCounter = regN | 0b1;
+        }
+
+        return 0;
+    }
+
     void cpu::create_arm_isa()
     {
         armISA[0] = { ARM_DATAPROC_1_MASK, ARM_DATAPROC_1_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1) };
         armISA[1] = { ARM_DATAPROC_2_MASK, ARM_DATAPROC_2_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1) };
         armISA[2] = { ARM_DATAPROC_3_MASK, ARM_DATAPROC_3_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1) };
+        armISA[3] = { ARM_BRANCHING_1_MASK, ARM_BRANCHING_1_TEST, std::bind(&cpu::arm_branchex, this, std::placeholders::_1) };
+        armISA[4] = { ARM_BRANCHING_2_MASK, ARM_BRANCHING_2_TEST, std::bind(&cpu::arm_branch, this, std::placeholders::_1) };
     }
 
     void cpu::reset_registers()
@@ -348,6 +385,8 @@ namespace br::gba
 
         for (u32 i = 0; i < 5; ++i)
             savedStatusRegisters[i] = 0;
+
+        statusRegister = 0;
     }
 
     cpu::cpu(bus& _addressBus)

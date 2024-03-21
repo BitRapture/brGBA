@@ -52,6 +52,8 @@ namespace br::gba
 
     private:
         const u32 arm_dataproc(const u32& _opcode);
+        const u32 arm_branch(const u32& _opcode);
+        const u32 arm_branchex(const u32& _opcode);
 
     private:
         /// @brief setup the armISA instruction map

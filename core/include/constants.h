@@ -4,7 +4,10 @@
 
 namespace br::gba
 {
-    inline constexpr u32 ARM_ISA_COUNT = 3;
+    inline constexpr u32 ARM_ISA_COUNT = 5;
+
+    inline constexpr u32 REGISTER_LINK_INDEX = 14;
+    inline constexpr u32 REGISTER_PROGRAM_COUNTER_INDEX = 15;
 
     inline constexpr u32 STATUS_REGISTER_N_SHIFT = 31;
     inline constexpr u32 STATUS_REGISTER_Z_SHIFT = 30;
@@ -24,6 +27,11 @@ namespace br::gba
     inline constexpr u32 ARM_DATAPROC_2_TEST = 0b0000'000'0000'0'0000'0000'0000'0'00'1'0000;
     inline constexpr u32 ARM_DATAPROC_3_MASK = 0b0000'111'0000'0'0000'0000'0000'00000000;
     inline constexpr u32 ARM_DATAPROC_3_TEST = 0b0000'001'0000'0'0000'0000'0000'00000000;
+    inline constexpr u32 ARM_BRANCHING_1_MASK = 0b0000'1111111111111111111111'0'1'0000;
+    inline constexpr u32 ARM_BRANCHING_1_TEST = 0b0000'0001001011111111111100'0'1'0000;
+    inline constexpr u32 ARM_BRANCHING_2_MASK = 0b0000'111'0'0000000000000000000000000;
+    inline constexpr u32 ARM_BRANCHING_2_TEST = 0b0000'101'0'0000000000000000000000000;
+
 
     inline constexpr bool test_overflow_pos(const u32& _x, const u32& _y)
     {
