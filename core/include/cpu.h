@@ -32,6 +32,10 @@ namespace br::gba
         /// @return formatted status information
         const std::string debug_print_status();
 
+        void debug_save_log(const std::string& _filePath);
+
+        void debug_log_arm_cycle(const u32& _opcode, const cpu_instruction& _instruction);
+
     private:
         /// @brief decode 32-bit arm instruction
         /// @return cycle count
@@ -89,9 +93,13 @@ namespace br::gba
 
         // arm instruction set array
         std::array<cpu_instruction, ARM_ISA_COUNT> armISA;
+
     private:
         // connection to gba bus for memory reading and writing
         bus& addressBus;
+
+    private:
+        std::string debugLog;
 
     public:
         cpu(bus& _addressBus);

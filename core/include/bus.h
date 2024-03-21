@@ -1,5 +1,7 @@
 #pragma once
 #include "typedefs.h"
+#include <vector>
+#include <string>
 
 namespace br::gba
 {
@@ -31,5 +33,11 @@ namespace br::gba
         /// @param _address absolute address
         /// @param _data 8bit data
         void write_8(const u32& _address, const u8& _data);
+
+    public:
+        const bool debug_load_program(const std::string& _filePath);
+
+    private:
+        std::vector<u8> programData;
     };
 }

@@ -6,12 +6,16 @@ int main()
     br::gba::bus gbaBus;
     br::gba::cpu gbaCPU(gbaBus);
 
-    gbaCPU.debug_cycle_instruction(0xe3e00000);
-    gbaCPU.debug_cycle_instruction(0xe3a0100a);
-    gbaCPU.debug_cycle_instruction(0xe2900001);
-    gbaCPU.debug_cycle_instruction(0xe2d11001);
+    if (!gbaBus.debug_load_program("../core_test/src/test.o"))
+    {
+        std::cout << "Could not load test ROM";
+        return -1;
+    }
+
+    for (br::u32 i = 0; i < 10; ++i)
+        gbaCPU.cycle();
     
-    std::cout << gbaCPU.debug_print_status();
+    gbaCPU.debug_save_log("./cpu.log");
 
     return 0;
 }

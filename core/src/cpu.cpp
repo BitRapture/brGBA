@@ -3,6 +3,7 @@
 #include "../include/constants.h"
 #include <sstream>
 #include <iomanip>
+#include <fstream>
 
 namespace br::gba
 {
@@ -37,23 +38,56 @@ namespace br::gba
             statusInfo << std::setfill('0') << std::setw(8) << std::hex << get_register(i);
             statusInfo << '\n';
         }
-        statusInfo << "CSPR: " << std::setfill('0') << std::setw(8) << std::hex << statusRegister << '\n';
+        statusInfo << "CSPR: 0x" << std::setfill('0') << std::setw(8) << std::hex << statusRegister;
 
         return statusInfo.str();
+    }
+
+    void cpu::debug_save_log(const std::string& _filePath)
+    {
+        std::ofstream file(_filePath);
+
+        if (!file.good())
+            return;
+
+        file << debugLog;
+
+        file.close();
+    }
+
+    void cpu::debug_log_arm_cycle(const u32& _opcode, const cpu_instruction& _instruction)
+    {
+        std::stringstream statusInfo;
+        statusInfo << "Opcode: 0x" << std::setfill('0') << std::setw(8) << std::hex << _opcode;
+        statusInfo << '\n';
+        statusInfo << "Inst Test: 0x" << std::setfill('0') << std::setw(8) << std::hex << _instruction.data_test;
+
+        debugLog += '\n';
+        if (_instruction.data_test == 0x0)
+            debugLog += "Instruction skipped!\n";
+        debugLog += statusInfo.str() + '\n';
+        debugLog += debug_print_status() + '\n';
     }
 
     const u32 cpu::decode_arm_instruction()
     {
         u32 opcode = addressBus.read_32(programCounter);
-        programCounter += 4;
+        programCounter += ARM_WORD_LENGTH;
 
         for (u32 i = 0; i < ARM_ISA_COUNT; ++i)
         {
             cpu_instruction currentInstruction = armISA[i];
 
             if ((currentInstruction.data_mask & opcode) == currentInstruction.data_test)
-                return currentInstruction.execute(opcode);
+            {
+                u32 cycleCount = 0;
+                cycleCount = currentInstruction.execute(opcode);
+                debug_log_arm_cycle(opcode, currentInstruction);
+                return cycleCount;
+            }
         }
+
+        debug_log_arm_cycle(opcode, {});
 
         return 0;
     }
@@ -61,7 +95,7 @@ namespace br::gba
     const u32 cpu::decode_thumb_instruction()
     {
         u16 opcode = addressBus.read_16(programCounter);
-        programCounter += 2;
+        programCounter += THUMB_WORD_LENGTH;
 
         return 0;
     }
@@ -331,12 +365,12 @@ namespace br::gba
             return 0;
 
         bool setLink = get_bit_bool(_opcode, 1 << 24);
-        s32 offset = (s32)(_opcode & 0xFFFFFF) * 4;
+        s32 offset = (s32)(_opcode & 0xFFFFFF) * 4; 
 
-        programCounter += 8 + offset;
+        programCounter += ARM_WORD_LENGTH + offset;
 
         if (setLink)
-            get_register(REGISTER_LINK_INDEX) = programCounter + 4;
+            get_register(REGISTER_LINK_INDEX) = programCounter;
 
         return 0;
     }
@@ -387,6 +421,10 @@ namespace br::gba
             savedStatusRegisters[i] = 0;
 
         statusRegister = 0;
+        programCounter = 0;
+
+
+        set_bit(statusRegister, STATUS_REGISTER_T_SHIFT, 1);
     }
 
     cpu::cpu(bus& _addressBus)
