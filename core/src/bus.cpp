@@ -20,6 +20,8 @@ namespace br::gba
 
     const u8 bus::read_8(const u32& _address)
     {
+        if (_address >= programData.size())
+            return 0;
         return programData[_address];
     }
 

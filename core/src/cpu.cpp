@@ -365,7 +365,7 @@ namespace br::gba
             return 0;
 
         bool setLink = get_bit_bool(_opcode, 1 << 24);
-        s32 offset = (s32)(_opcode & 0xFFFFFF) * 4; 
+        s32 offset = ((s32)_opcode << 8) >> 6;
 
         programCounter += ARM_WORD_LENGTH + offset;
 
