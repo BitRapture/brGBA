@@ -54,10 +54,14 @@ namespace br::gba
         /// @return true if opcode can be ran
         const bool check_condition(const u32& _code);
 
+        const u32 shift_operand(const u32& _shiftType, const bool& _zeroShift, const u32& _operand, const u32& _shift, u32& _carryFlag);
+        const u32 shift_operand(const u32& _shiftType, const bool& _zeroShift, const u32& _operand, const u32& _shift);
+
     private:
         const u32 arm_dataproc(const u32& _opcode);
         const u32 arm_branch(const u32& _opcode);
-        const u32 arm_branchex(const u32& _opcode);
+        const u32 arm_branch_ex(const u32& _opcode);
+        const u32 arm_trans_single(const u32& _opcode);
 
     private:
         /// @brief setup the armISA instruction map

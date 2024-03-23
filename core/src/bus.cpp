@@ -1,4 +1,6 @@
 #include "../include/bus.h"
+#include <sstream>
+#include <iomanip>
 #include <fstream>
 #include <iterator>
 
@@ -22,22 +24,28 @@ namespace br::gba
     {
         if (_address >= programData.size())
             return 0;
+
         return programData[_address];
     }
 
     void bus::write_32(const u32& _address, const u32& _data)
     {
-
+        write_16(_address, _data & 0xFFFF);
+        write_16(_address + 2, _data >> 16);
     }
 
     void bus::write_16(const u32& _address, const u16& _data)
     {
-        
+        write_8(_address, _data & 0xFF);
+        write_8(_address + 1, _data >> 8);
     }
 
     void bus::write_8(const u32& _address, const u8& _data)
     {
+        if (_address >= programData.size())
+            return;
         
+        programData[_address] = _data;
     }
 
     const bool bus::debug_load_program(const std::string& _filePath)
@@ -51,11 +59,19 @@ namespace br::gba
         std::streampos fileSize = file.tellg();
         file.seekg(0, std::ios::beg);
 
-        programData.reserve(fileSize);
+        programData.resize(0xFFFFFF, 0);
         programData.insert(programData.begin(), std::istream_iterator<u8>(file), std::istream_iterator<u8>());
 
         file.close();
 
         return programData.size() > 0;
+    }
+
+    const std::string bus::debug_print_memory(const u32& _address)
+    {
+        std::stringstream statusInfo;
+        statusInfo << "Mem [0x" << std::setfill('0') << std::setw(8) << std::hex << _address << "]: 0x";
+        statusInfo << std::setfill('0') << std::setw(8) << std::hex << read_32(_address) << "\n";
+        return statusInfo.str();
     }
 }

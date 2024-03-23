@@ -2,6 +2,7 @@
 #include "typedefs.h"
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 namespace br::gba
 {
@@ -36,6 +37,8 @@ namespace br::gba
 
     public:
         const bool debug_load_program(const std::string& _filePath);
+
+        const std::string debug_print_memory(const u32& _address);
 
     private:
         std::vector<u8> programData;

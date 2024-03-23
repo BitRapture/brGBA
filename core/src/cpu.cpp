@@ -10,9 +10,9 @@ namespace br::gba
     const u32 cpu::cycle()
     {
         if (get_bit_bool(statusRegister, STATUS_REGISTER_T))
-            return decode_arm_instruction();
-        else
             return decode_thumb_instruction();
+        else
+            return decode_arm_instruction();
     }
 
     const u32 cpu::debug_cycle_instruction(const u32& _instruction)
@@ -166,10 +166,55 @@ namespace br::gba
         case 14: // AL
             return true;
         case 15: // NV
-            return false;
+            return true;
         }
 
         return false;
+    }
+
+    const u32 cpu::shift_operand(const u32& _shiftType, const bool& _zeroShift, const u32& _operand, const u32& _shift, u32& _carryFlag)
+    {
+        u32 operand = _operand;
+        u32 shift = _zeroShift ? 32 : _shift;
+
+        switch (_shiftType)
+            {
+            case 0x0: // LSL
+                if (_zeroShift)
+                    break;
+                _carryFlag = (operand << shift - 1) >> 31;
+                operand <<= shift;
+                break;
+            case 0x1: // LSR
+                _carryFlag = (operand >> shift - 1) & 0b1;
+                operand >>= shift;
+                break;
+            case 0x2: // ASR
+                // compiler must be able to perform asr for this to work correctly!!
+                _carryFlag = ((s32)operand >> shift - 1) & 0b1;
+                operand = (s32)operand >> shift; 
+                break;
+            case 0x3: // ROR
+                _carryFlag = operand & 0b1;
+                if (_zeroShift) // RCR
+                {
+                    operand >>= 1;
+                    operand |= (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) << 31;
+                }
+                else
+                {
+                    operand = rotate_right(operand, shift);
+                }
+                break;
+            }
+
+        return operand;
+    }
+
+    const u32 cpu::shift_operand(const u32& _shiftType, const bool& _zeroShift, const u32& _operand, const u32& _shift)
+    {
+        u32 tempCarry = 0;
+        return shift_operand(_shiftType, _zeroShift, _operand, _shift, tempCarry);
     }
 
     const u32 cpu::arm_dataproc(const u32& _opcode)
@@ -208,43 +253,10 @@ namespace br::gba
             {
                 shift = (_opcode >> 7) & 0b11111;
                 zeroShift = shift == 0;
-
-                if (zeroShift)
-                    shift = 32;
             }
 
             operand = get_register(_opcode & 0b1111);
-
-            switch (shiftType)
-            {
-            case 0x0: // LSL
-                if (zeroShift)
-                    break;
-                carry = (operand << shift - 1) >> 31;
-                operand <<= shift;
-                break;
-            case 0x1: // LSR
-                carry = (operand >> shift - 1) & 0b1;
-                operand >>= shift;
-                break;
-            case 0x2: // ASR
-                // compiler must be able to perform asr for this to work correctly!!
-                carry = ((s32)operand >> shift - 1) & 0b1;
-                operand = (s32)operand >> shift; 
-                break;
-            case 0x3: // ROR
-                carry = operand & 0b1;
-                if (zeroShift) // RCR
-                {
-                    operand >>= 1;
-                    operand |= (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) << 31;
-                }
-                else
-                {
-                    operand = rotate_right(operand, shift);
-                }
-                break;
-            }
+            operand = shift_operand(shiftType, zeroShift, operand, shift, carry);
 
             if (zeroShiftRegister)
                 carry = 0;
@@ -353,7 +365,7 @@ namespace br::gba
                 set_bit(statusRegister, STATUS_REGISTER_V_SHIFT, overflow);
             set_bit(statusRegister, STATUS_REGISTER_C_SHIFT, carry);
             set_bit(statusRegister, STATUS_REGISTER_Z_SHIFT, result == 0);
-            set_bit(statusRegister, STATUS_REGISTER_N_SHIFT, result >> 31);
+            set_bit(statusRegister, STATUS_REGISTER_N_SHIFT, result >> STATUS_REGISTER_N_SHIFT);
         }
 
         return 0;
@@ -361,7 +373,7 @@ namespace br::gba
 
     const u32 cpu::arm_branch(const u32& _opcode)
     {
-        if (!check_condition(_opcode >> 28))
+        if (!check_condition(_opcode >> ARM_CONDITION_SHIFT))
             return 0;
 
         bool setLink = get_bit_bool(_opcode, 1 << 24);
@@ -375,15 +387,18 @@ namespace br::gba
         return 0;
     }
 
-    const u32 cpu::arm_branchex(const u32& _opcode)
+    const u32 cpu::arm_branch_ex(const u32& _opcode)
     {
+        if (!check_condition(_opcode >> ARM_CONDITION_SHIFT))
+            return 0;
+
         u32 branchType = (_opcode >> 4) & 0b1111;
         u32 regN = get_register(_opcode & 0b1111);
 
         // ARMv4 only supports BX (switch to THUMB mode)
         if (branchType == 0b0001)
         {
-            bool thumbMode = regN & 1;
+            bool thumbMode = regN & 0b1;
             
             set_bit(statusRegister, STATUS_REGISTER_T_SHIFT, thumbMode);
             
@@ -394,13 +409,80 @@ namespace br::gba
         return 0;
     }
 
+    const u32 cpu::arm_trans_single(const u32& _opcode)
+    {
+        if (!check_condition(_opcode >> ARM_CONDITION_SHIFT))
+            return 0;
+
+        bool isImmediate = get_not_bit_bool(_opcode, 1 << 25);
+        bool isPreOffset = get_bit_bool(_opcode, 1 << 24);
+        bool isByteTransfer = get_bit_bool(_opcode, 1 << 22);
+        bool isLoad = get_bit_bool(_opcode, 1 << 20);
+
+        u32 offsetSign = get_bit_bool(_opcode, 1 << 23);
+        u32& regD = get_register((_opcode >> 12) & 0b1111);
+        u32& regN = get_register((_opcode >> 16) & 0b1111);
+
+        u32 offset = 0;
+        if (isImmediate)
+        {
+            offset = _opcode & 0xFFF;
+        }
+        else
+        {
+            u32 regOffset = get_register(_opcode & 0b1111);
+            u32 shiftType = (_opcode >> 5) & 0b11;
+            u32 shift = (_opcode >> 7) & 0b11111;
+            
+            offset = shift_operand(shiftType, shift == 0, regOffset, shift);
+        }
+
+        u32 destAddress = regN;
+        if (isPreOffset)
+        {
+            destAddress = sub_or_add(destAddress, offset, offsetSign);
+            
+            bool writeBack = get_bit_bool(_opcode, 1 << 21);
+            if (writeBack)
+                regN = destAddress;
+        }
+
+        if (isLoad)
+        {
+            u32 data = addressBus.read_32(destAddress);
+            regD = isByteTransfer ? data & 0xFF : data;
+        }
+        else
+        {
+            if (isByteTransfer)
+            {
+                addressBus.write_8(destAddress, regD & 0xFF);
+            }
+            else
+            {
+                addressBus.write_32(destAddress, regD);
+            }
+        }
+
+        // post offset, writeback always enabled
+        if (!isPreOffset)
+        {
+            destAddress = sub_or_add(destAddress, offset, offsetSign);
+            regN = destAddress;
+        }
+
+        return 0;
+    }
+
     void cpu::create_arm_isa()
     {
         armISA[0] = { ARM_DATAPROC_1_MASK, ARM_DATAPROC_1_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1) };
         armISA[1] = { ARM_DATAPROC_2_MASK, ARM_DATAPROC_2_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1) };
         armISA[2] = { ARM_DATAPROC_3_MASK, ARM_DATAPROC_3_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1) };
-        armISA[3] = { ARM_BRANCHING_1_MASK, ARM_BRANCHING_1_TEST, std::bind(&cpu::arm_branchex, this, std::placeholders::_1) };
+        armISA[3] = { ARM_BRANCHING_1_MASK, ARM_BRANCHING_1_TEST, std::bind(&cpu::arm_branch_ex, this, std::placeholders::_1) };
         armISA[4] = { ARM_BRANCHING_2_MASK, ARM_BRANCHING_2_TEST, std::bind(&cpu::arm_branch, this, std::placeholders::_1) };
+        armISA[5] = { ARM_TRANSFER_1_MASK, ARM_TRANSFER_1_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1) };
+        armISA[6] = { ARM_TRANSFER_2_MASK, ARM_TRANSFER_2_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1) };
     }
 
     void cpu::reset_registers()
@@ -422,9 +504,6 @@ namespace br::gba
 
         statusRegister = 0;
         programCounter = 0;
-
-
-        set_bit(statusRegister, STATUS_REGISTER_T_SHIFT, 1);
     }
 
     cpu::cpu(bus& _addressBus)

@@ -4,7 +4,7 @@
 
 namespace br::gba
 {
-    inline constexpr u32 ARM_ISA_COUNT = 5;
+    inline constexpr u32 ARM_ISA_COUNT = 7;
 
     inline constexpr u32 ARM_WORD_LENGTH = 4;
     inline constexpr u32 THUMB_WORD_LENGTH = 2;
@@ -24,6 +24,8 @@ namespace br::gba
     inline constexpr u32 STATUS_REGISTER_V = 1 << STATUS_REGISTER_V_SHIFT;
     inline constexpr u32 STATUS_REGISTER_T = 1 << STATUS_REGISTER_T_SHIFT;
 
+    inline constexpr u32 ARM_CONDITION_SHIFT = 28;
+    
     inline constexpr u32 ARM_DATAPROC_1_MASK = 0b0000'111'0000'0'0000'0000'00000'00'1'0000;
     inline constexpr u32 ARM_DATAPROC_1_TEST = 0b0000'000'0000'0'0000'0000'00000'00'0'0000;
     inline constexpr u32 ARM_DATAPROC_2_MASK = 0b0000'111'0000'0'0000'0000'0000'1'00'1'0000;
@@ -34,6 +36,10 @@ namespace br::gba
     inline constexpr u32 ARM_BRANCHING_1_TEST = 0b0000'0001001011111111111100'0'1'0000;
     inline constexpr u32 ARM_BRANCHING_2_MASK = 0b0000'111'0'000000000000000000000000;
     inline constexpr u32 ARM_BRANCHING_2_TEST = 0b0000'101'0'000000000000000000000000;
+    inline constexpr u32 ARM_TRANSFER_1_MASK = 0b0000'111'00000'0000'0000'00000'00'1'0000;
+    inline constexpr u32 ARM_TRANSFER_1_TEST = 0b0000'011'00000'0000'0000'00000'00'0'0000;
+    inline constexpr u32 ARM_TRANSFER_2_MASK = 0b0000'111'00000'0000'0000'000000000000;
+    inline constexpr u32 ARM_TRANSFER_2_TEST = 0b0000'010'00000'0000'0000'000000000000;
 
 
     inline constexpr bool test_overflow_pos(const u32& _x, const u32& _y)
@@ -102,5 +108,10 @@ namespace br::gba
     inline constexpr u32 rotate_right(const u32& _data, const u32& _rotate)
     {
         return (_data >> _rotate) | (_data << ((32 - _rotate) % 32));
+    }
+
+    inline constexpr u32 sub_or_add(const u32& _data, const u32& _operand, const u32& _bool)
+    {
+        return _data + (_operand * _bool) - (_operand * !_bool);
     }
 }
