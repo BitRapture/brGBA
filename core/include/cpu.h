@@ -62,6 +62,7 @@ namespace br::gba
         const u32 arm_branch(const u32& _opcode);
         const u32 arm_branch_ex(const u32& _opcode);
         const u32 arm_trans_single(const u32& _opcode);
+        const u32 arm_trans_half(const u32& _opcode);
 
     private:
         /// @brief setup the armISA instruction map

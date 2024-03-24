@@ -474,6 +474,76 @@ namespace br::gba
         return 0;
     }
 
+    const u32 cpu::arm_trans_half(const u32& _opcode)
+    {
+        if (!check_condition(_opcode >> ARM_CONDITION_SHIFT))
+            return 0;
+
+        bool isPreOffset = get_bit_bool(_opcode, 1 << 24);
+        bool isImmediate = get_bit_bool(_opcode, 1 << 22);
+        bool isLoad = get_bit_bool(_opcode, 1 << 20);
+
+        u32 offsetSign = get_bit_bool(_opcode, 1 << 23);
+        u32& regD = get_register((_opcode >> 12) & 0b1111);
+        u32& regN = get_register((_opcode >> 16) & 0b1111);
+        
+        u32 offset = 0;
+        if (isImmediate)
+        {
+            offset = ((_opcode >> 4) & 0xF0) | (_opcode & 0b1111);
+        }
+        else
+        {
+            offset = get_register(_opcode & 0b1111);
+        }
+
+        u32 destAddress = regN;
+        if (isPreOffset)
+        {
+            destAddress = sub_or_add(destAddress, offset, offsetSign);
+            
+            bool writeBack = get_bit_bool(_opcode, 1 << 21);
+            if (writeBack)
+                regN = destAddress;
+        }
+
+        u32 transType = (_opcode >> 5) & 0b11;
+        if (isLoad)
+        {
+            u32 data = 0;
+            switch (transType)
+            {
+            case 0b01: // ldrh
+                data = addressBus.read_16(destAddress);
+                break;
+            case 0b10: // ldrsb
+                data = addressBus.read_8(destAddress);
+                data |= 0xFFFFFF00 * (data >> 7);
+                break;
+            case 0b11: // ldrsh
+                data = addressBus.read_16(destAddress);
+                data |= 0xFFFF0000 * (data >> 15);
+                break;                
+            }
+
+            regD = data;
+        }
+        else
+        {
+            // only strh for ARMv4
+            if (transType == 0b01)
+                addressBus.write_16(destAddress, regN & 0xFFFF);
+        }
+
+        if (!isPreOffset)
+        {
+            destAddress = sub_or_add(destAddress, offset, offsetSign);
+            regN = destAddress;
+        }
+
+        return 0;
+    }
+
     void cpu::create_arm_isa()
     {
         armISA[0] = { ARM_DATAPROC_1_MASK, ARM_DATAPROC_1_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1) };
@@ -483,6 +553,8 @@ namespace br::gba
         armISA[4] = { ARM_BRANCHING_2_MASK, ARM_BRANCHING_2_TEST, std::bind(&cpu::arm_branch, this, std::placeholders::_1) };
         armISA[5] = { ARM_TRANSFER_1_MASK, ARM_TRANSFER_1_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1) };
         armISA[6] = { ARM_TRANSFER_2_MASK, ARM_TRANSFER_2_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1) };
+        armISA[7] = { ARM_TRANSFER_3_MASK, ARM_TRANSFER_3_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1) };
+        armISA[8] = { ARM_TRANSFER_4_MASK, ARM_TRANSFER_4_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1) };
     }
 
     void cpu::reset_registers()
