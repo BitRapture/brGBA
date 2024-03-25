@@ -544,6 +544,76 @@ namespace br::gba
         return 0;
     }
 
+    const u32 cpu::arm_trans_swap(const u32& _opcode)
+    {
+        if (!check_condition(_opcode >> ARM_CONDITION_SHIFT))
+            return 0;
+
+        bool isByteTransfer = get_bit_bool(_opcode, 1 << 22);
+
+        u32& regN = get_register((_opcode >> 16) & 0b1111);
+        u32& regD = get_register((_opcode >> 12) & 0b1111);
+        u32& regM = get_register(_opcode & 0b1111);
+
+        if (isByteTransfer)
+        {
+            regD = addressBus.read_8(regN);
+            addressBus.write_8(regN, regM & 0xFF);
+        }
+        else
+        {
+            regD = addressBus.read_32(regN);
+            addressBus.write_32(regN, regM);
+        }
+
+        return 0;
+    }
+
+    const u32 cpu::arm_trans_block(const u32& _opcode)
+    {
+        if (!check_condition(_opcode >> ARM_CONDITION_SHIFT))
+            return 0;
+
+        bool isPreOffset = get_bit_bool(_opcode, 1 << 24);
+        bool isUserMode = get_bit_bool(_opcode, 1 << 22);
+        bool writeBack = get_bit_bool(_opcode, 1 << 21);
+        bool isLoad = get_bit_bool(_opcode, 1 << 20);
+
+        u32& regN = get_register((_opcode >> 16) & 0b1111);
+        u32 regList = _opcode & 0xFFFF;
+
+        u32 offsetSign = get_bit_bool(_opcode, 1 << 23);
+        u32 offset = bit_count(regList, REGISTER_LIST_LENGTH) * ARM_WORD_LENGTH;
+        
+        u32 destAddress = regN - bool_lerp(offset, 0, offsetSign);
+        for (u32 i = 0; i < REGISTER_LIST_LENGTH; ++i)
+        {
+            bool useRegister = (regList >> i) & 0b1;
+
+            if (useRegister)
+            {
+                destAddress += bool_lerp(0, ARM_WORD_LENGTH, isPreOffset);
+
+                u32& regData = get_register(i);
+                if (isLoad)
+                {
+                    regData = addressBus.read_32(destAddress);
+                }
+                else
+                {
+                    addressBus.write_32(destAddress, regData);
+                }
+
+                destAddress += bool_lerp(ARM_WORD_LENGTH, 0, isPreOffset);
+            }
+        }
+
+        if (writeBack)
+            regN = sub_or_add(regN, offset, offsetSign);;
+
+        return 0;
+    }
+
     void cpu::create_arm_isa()
     {
         armISA[0] = { ARM_DATAPROC_1_MASK, ARM_DATAPROC_1_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1) };
@@ -555,6 +625,8 @@ namespace br::gba
         armISA[6] = { ARM_TRANSFER_2_MASK, ARM_TRANSFER_2_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1) };
         armISA[7] = { ARM_TRANSFER_3_MASK, ARM_TRANSFER_3_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1) };
         armISA[8] = { ARM_TRANSFER_4_MASK, ARM_TRANSFER_4_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1) };
+        armISA[9] = { ARM_TRANSFER_5_MASK, ARM_TRANSFER_5_TEST, std::bind(&cpu::arm_trans_swap, this, std::placeholders::_1) };
+        armISA[10] = { ARM_TRANSFER_6_MASK, ARM_TRANSFER_6_TEST, std::bind(&cpu::arm_trans_block, this, std::placeholders::_1) };
     }
 
     void cpu::reset_registers()

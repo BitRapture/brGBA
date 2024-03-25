@@ -4,7 +4,7 @@
 
 namespace br::gba
 {
-    inline constexpr u32 ARM_ISA_COUNT = 9;
+    inline constexpr u32 ARM_ISA_COUNT = 11;
 
     inline constexpr u32 ARM_WORD_LENGTH = 4;
     inline constexpr u32 THUMB_WORD_LENGTH = 2;
@@ -23,6 +23,7 @@ namespace br::gba
     inline constexpr u32 STATUS_REGISTER_C = 1 << STATUS_REGISTER_C_SHIFT;
     inline constexpr u32 STATUS_REGISTER_V = 1 << STATUS_REGISTER_V_SHIFT;
     inline constexpr u32 STATUS_REGISTER_T = 1 << STATUS_REGISTER_T_SHIFT;
+    inline constexpr u32 REGISTER_LIST_LENGTH = 16;
 
     inline constexpr u32 ARM_CONDITION_SHIFT = 28;
     
@@ -44,6 +45,10 @@ namespace br::gba
     inline constexpr u32 ARM_TRANSFER_3_TEST = 0b0000'000'00'0'00'0000'0000'0000'1'00'1'0000;
     inline constexpr u32 ARM_TRANSFER_4_MASK = 0b0000'111'00'1'00'0000'0000'0000'1'00'1'0000;
     inline constexpr u32 ARM_TRANSFER_4_TEST = 0b0000'000'00'1'00'0000'0000'0000'1'00'1'0000;
+    inline constexpr u32 ARM_TRANSFER_5_MASK = 0b0000'11111'0'11'0000'0000'1111'1111'0000;
+    inline constexpr u32 ARM_TRANSFER_5_TEST = 0b0000'00010'0'00'0000'0000'0000'1001'0000;
+    inline constexpr u32 ARM_TRANSFER_6_MASK = 0b0000'111'00000'0000'0000000000000000;
+    inline constexpr u32 ARM_TRANSFER_6_TEST = 0b0000'100'00000'0000'0000000000000000;
 
     inline constexpr bool test_overflow_pos(const u32& _x, const u32& _y)
     {
@@ -116,5 +121,20 @@ namespace br::gba
     inline constexpr u32 sub_or_add(const u32& _data, const u32& _operand, const u32& _bool)
     {
         return _data + (_operand * _bool) - (_operand * !_bool);
+    }
+
+    inline constexpr u32 bool_lerp(const u32& _a, const u32& _b, const u32& _bool)
+    {
+        return (_a * !_bool) + (_b * _bool); 
+    }
+
+    inline constexpr u32 bit_count(const u32& _data, const u32& _length)
+    {
+        u32 count = 0;
+        for (u32 i = 0; i < _length; ++i)
+        {
+            count += (_data >> i) & 0b1;
+        }
+        return count;
     }
 }
