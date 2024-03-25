@@ -14,6 +14,8 @@ namespace br::gba
         u32 data_mask;
         u32 data_test;
         std::function<const u32(const u32&)> execute;
+
+        std::string debug_info;
     };
 
     class cpu
@@ -65,6 +67,7 @@ namespace br::gba
         const u32 arm_trans_half(const u32& _opcode);
         const u32 arm_trans_swap(const u32& _opcode);
         const u32 arm_trans_block(const u32& _opcode);
+        const u32 arm_multiply(const u32& _opcode);
 
     private:
         /// @brief setup the armISA instruction map

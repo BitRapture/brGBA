@@ -57,14 +57,15 @@ namespace br::gba
 
     void cpu::debug_log_arm_cycle(const u32& _opcode, const cpu_instruction& _instruction)
     {
+        if (_instruction.data_test == 0x0)
+            return;
+
         std::stringstream statusInfo;
         statusInfo << "Opcode: 0x" << std::setfill('0') << std::setw(8) << std::hex << _opcode;
-        statusInfo << '\n';
-        statusInfo << "Inst Test: 0x" << std::setfill('0') << std::setw(8) << std::hex << _instruction.data_test;
+        statusInfo << "\nInst Test: 0x" << std::setfill('0') << std::setw(8) << std::hex << _instruction.data_test;
+        statusInfo << "\nInst Type: " << _instruction.debug_info;
 
         debugLog += '\n';
-        if (_instruction.data_test == 0x0)
-            debugLog += "Instruction skipped!\n";
         debugLog += statusInfo.str() + '\n';
         debugLog += debug_print_status() + '\n';
     }
@@ -513,14 +514,14 @@ namespace br::gba
             u32 data = 0;
             switch (transType)
             {
-            case 0b01: // ldrh
+            case 0b01: // LDRH
                 data = addressBus.read_16(destAddress);
                 break;
-            case 0b10: // ldrsb
+            case 0b10: // LDRSB
                 data = addressBus.read_8(destAddress);
                 data |= 0xFFFFFF00 * (data >> 7);
                 break;
-            case 0b11: // ldrsh
+            case 0b11: // LDRSH
                 data = addressBus.read_16(destAddress);
                 data |= 0xFFFF0000 * (data >> 15);
                 break;                
@@ -530,7 +531,7 @@ namespace br::gba
         }
         else
         {
-            // only strh for ARMv4
+            // only STRH for ARMv4
             if (transType == 0b01)
                 addressBus.write_16(destAddress, regN & 0xFFFF);
         }
@@ -614,19 +615,86 @@ namespace br::gba
         return 0;
     }
 
+    const u32 cpu::arm_multiply(const u32& _opcode)
+    {
+        if (!check_condition(_opcode >> ARM_CONDITION_SHIFT))
+            return 0;
+
+        bool setStatus = get_bit_bool(_opcode, 1 << 20);
+
+        u32& regHi = get_register((_opcode >> 16) & 0b1111);
+        u32& regLo = get_register((_opcode >> 12) & 0b1111);
+        u64 regHiLo = ((u64)regHi << 32) | regLo;
+        u64 regS = get_register((_opcode >> 8) & 0b1111);
+        u64 regM = get_register(_opcode & 0b1111);
+
+        bool setRegLo = false;
+        u64 result = 0;
+        u32 multiplyType = (_opcode >> 21) & 0b1111;
+        switch (multiplyType)
+        {
+        case 0b0000: // MUL
+            result = regM * regS;
+            break;
+        case 0b0001: // MLA
+            result = regM * regS + regLo;
+            break;
+        case 0b0100: // UMULL
+            result = regM * regS;
+            setRegLo = true;
+            break;
+        case 0b0101: // UMLAL
+            result = regM * regS + regHiLo;
+            setRegLo = true;
+            break;
+        case 0b0110: // SMULL
+            result = (s64)regM * (s64)regS;
+            setRegLo = true;
+            break;
+        case 0b0111: // SMLAL
+            result = (s64)regM * (s64)regS + (s64)regHiLo;
+            setRegLo = true;
+            break;
+        }
+
+        if (setRegLo)
+        {
+            regHi = result >> 32;
+            regLo = result & 0xFFFFFFFF;
+        }
+        else
+        {
+            regHi = result & 0xFFFFFFFF;
+            result <<= 32;
+        }
+
+        if (setStatus)
+        {
+            if (setRegLo)
+                set_bit(statusRegister, STATUS_REGISTER_V_SHIFT, 0);
+            set_bit(statusRegister, STATUS_REGISTER_C_SHIFT, 0);
+            set_bit(statusRegister, STATUS_REGISTER_Z_SHIFT, result == 0);
+            set_bit(statusRegister, STATUS_REGISTER_N_SHIFT, result >> 63);
+        }
+
+        return 0;
+    }
+
     void cpu::create_arm_isa()
     {
-        armISA[0] = { ARM_DATAPROC_1_MASK, ARM_DATAPROC_1_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1) };
-        armISA[1] = { ARM_DATAPROC_2_MASK, ARM_DATAPROC_2_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1) };
-        armISA[2] = { ARM_DATAPROC_3_MASK, ARM_DATAPROC_3_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1) };
-        armISA[3] = { ARM_BRANCHING_1_MASK, ARM_BRANCHING_1_TEST, std::bind(&cpu::arm_branch_ex, this, std::placeholders::_1) };
-        armISA[4] = { ARM_BRANCHING_2_MASK, ARM_BRANCHING_2_TEST, std::bind(&cpu::arm_branch, this, std::placeholders::_1) };
-        armISA[5] = { ARM_TRANSFER_1_MASK, ARM_TRANSFER_1_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1) };
-        armISA[6] = { ARM_TRANSFER_2_MASK, ARM_TRANSFER_2_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1) };
-        armISA[7] = { ARM_TRANSFER_3_MASK, ARM_TRANSFER_3_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1) };
-        armISA[8] = { ARM_TRANSFER_4_MASK, ARM_TRANSFER_4_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1) };
-        armISA[9] = { ARM_TRANSFER_5_MASK, ARM_TRANSFER_5_TEST, std::bind(&cpu::arm_trans_swap, this, std::placeholders::_1) };
-        armISA[10] = { ARM_TRANSFER_6_MASK, ARM_TRANSFER_6_TEST, std::bind(&cpu::arm_trans_block, this, std::placeholders::_1) };
+        armISA[0] = { ARM_DATAPROC_1_MASK, ARM_DATAPROC_1_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),         "Data Proc 1" };
+        armISA[1] = { ARM_DATAPROC_2_MASK, ARM_DATAPROC_2_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),         "Data Proc 2" };
+        armISA[2] = { ARM_DATAPROC_3_MASK, ARM_DATAPROC_3_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),         "Data Proc 3" };
+        armISA[3] = { ARM_MULTIPLY_1_MASK, ARM_MULTIPLY_1_TEST, std::bind(&cpu::arm_multiply, this, std::placeholders::_1),         "Multiply 1" };
+        armISA[4] = { ARM_MULTIPLY_2_MASK, ARM_MULTIPLY_2_TEST, std::bind(&cpu::arm_multiply, this, std::placeholders::_1),         "Multiply 2" };
+        armISA[5] = { ARM_BRANCHING_1_MASK, ARM_BRANCHING_1_TEST, std::bind(&cpu::arm_branch_ex, this, std::placeholders::_1),      "Branch Ex" };
+        armISA[6] = { ARM_BRANCHING_2_MASK, ARM_BRANCHING_2_TEST, std::bind(&cpu::arm_branch, this, std::placeholders::_1),         "Branch" };
+        armISA[7] = { ARM_TRANSFER_1_MASK, ARM_TRANSFER_1_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1),     "Transfer Single 1" };
+        armISA[8] = { ARM_TRANSFER_2_MASK, ARM_TRANSFER_2_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1),     "Transfer Single 2" };
+        armISA[9] = { ARM_TRANSFER_3_MASK, ARM_TRANSFER_3_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1),       "Transfer Half 1" };
+        armISA[10] = { ARM_TRANSFER_4_MASK, ARM_TRANSFER_4_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1),      "Transfer Half 2" };
+        armISA[11] = { ARM_TRANSFER_5_MASK, ARM_TRANSFER_5_TEST, std::bind(&cpu::arm_trans_swap, this, std::placeholders::_1),      "Transfer Swap" };
+        armISA[12] = { ARM_TRANSFER_6_MASK, ARM_TRANSFER_6_TEST, std::bind(&cpu::arm_trans_block, this, std::placeholders::_1),     "Transfer Block" };
     }
 
     void cpu::reset_registers()
