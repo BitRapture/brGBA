@@ -70,6 +70,19 @@ namespace br::gba
         debugLog += debug_print_status() + '\n';
     }
 
+    const std::string cpu::debug_print_isa(const bool& _armISA)
+    {
+        u32 isaSize = _armISA ? ARM_ISA_COUNT : 0;
+        std::string isaList;
+
+        for (u32 i = 0; i < isaSize; ++i)
+        {
+            isaList += "i: " + std::to_string(i) + ", " + (_armISA ? armISA[i] : armISA[i]).debug_info + "\n";
+        }
+         
+        return isaList;;
+    }
+
     const u32 cpu::decode_arm_instruction()
     {
         u32 opcode = addressBus.read_32(programCounter);
@@ -695,6 +708,8 @@ namespace br::gba
         armISA[10] = { ARM_TRANSFER_4_MASK, ARM_TRANSFER_4_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1),      "Transfer Half 2" };
         armISA[11] = { ARM_TRANSFER_5_MASK, ARM_TRANSFER_5_TEST, std::bind(&cpu::arm_trans_swap, this, std::placeholders::_1),      "Transfer Swap" };
         armISA[12] = { ARM_TRANSFER_6_MASK, ARM_TRANSFER_6_TEST, std::bind(&cpu::arm_trans_block, this, std::placeholders::_1),     "Transfer Block" };
+
+        sort_isa_array<cpu_instruction, ARM_ISA_COUNT, ARM_WORD_BIT_LENGTH>(armISA);
     }
 
     void cpu::reset_registers()

@@ -12,13 +12,15 @@ int main()
         return -1;
     }
 
+    std::cout << gbaCPU.debug_print_isa(true);
+    
     for (br::u32 i = 0; i < 48; ++i)
         gbaCPU.cycle();
     
     gbaCPU.debug_save_log("./cpu.log");
     
-    for (br::u32 i = 0; i < 10; ++i)
-        std::cout << gbaBus.debug_print_memory(0xFF0000 + (i * 4));
+    //for (br::u32 i = 0; i < 10; ++i)
+    //    std::cout << gbaBus.debug_print_memory(0xFF0000 + (i * 4));
 
     return 0;
 }

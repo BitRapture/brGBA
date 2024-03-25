@@ -1,12 +1,14 @@
 #pragma once
 #include "typedefs.h"   
 #include <limits>
+#include <array>
 
 namespace br::gba
 {
     inline constexpr u32 ARM_ISA_COUNT = 13;
 
     inline constexpr u32 ARM_WORD_LENGTH = 4;
+    inline constexpr u32 ARM_WORD_BIT_LENGTH = 32;
     inline constexpr u32 THUMB_WORD_LENGTH = 2;
 
     inline constexpr u32 REGISTER_LINK_INDEX = 14;
@@ -140,5 +142,85 @@ namespace br::gba
             count += (_data >> i) & 0b1;
         }
         return count;
+    }
+
+    template <typename T, u32 S, u32 SB>
+    inline constexpr void sort_isa_array(std::array<T, S>& _isaArray)
+    {
+        std::array<u32, S> isaIndices;
+        std::array<u32, S> isaMaskCount;
+        std::array<u32, S> isaTestCount;
+        for (u32 i = 0; i < S; ++i)
+        {
+            isaIndices[i] = i;
+            isaMaskCount[i] = bit_count(_isaArray[i].data_mask, SB);
+            isaTestCount[i] = bit_count(_isaArray[i].data_test, SB);
+        }
+
+        for (u32 i = 0; i < S; ++i)
+        {
+            for (u32 j = 0; j < S; ++j)
+            {                
+                if (isaIndices[i] == isaIndices[j])
+                    continue;
+
+                u32 tempIndex, tempMaskCount, tempTestCount;
+                bool maskCountGreater = isaMaskCount[i] > isaMaskCount[j];
+                bool maskGreater = _isaArray[isaIndices[i]].data_mask > _isaArray[isaIndices[j]].data_mask;
+
+                if (maskCountGreater || maskGreater)
+                {
+                    tempMaskCount = isaMaskCount[i];
+                    tempTestCount = isaTestCount[i];
+                    tempIndex = isaIndices[i];
+
+                    isaMaskCount[i] = isaMaskCount[j];
+                    isaTestCount[i] = isaTestCount[j];
+                    isaIndices[i] = isaIndices[j];
+
+                    isaMaskCount[j] = tempMaskCount;
+                    isaTestCount[j] = tempTestCount;
+                    isaIndices[j] = tempIndex;
+                }
+            }
+        } 
+
+        for (u32 i = 0; i < S; ++i)
+        {
+            for (u32 j = 0; j < S; ++j)
+            {                
+                if (isaIndices[i] == isaIndices[j])
+                    continue;
+
+                u32 tempIndex, tempMaskCount, tempTestCount;
+                bool maskEqual = _isaArray[isaIndices[i]].data_mask == _isaArray[isaIndices[j]].data_mask;
+                bool testCountGreater = isaTestCount[i] > isaTestCount[j];
+                bool testCountEqual = isaTestCount[i] == isaTestCount[j];
+                bool testGreater = _isaArray[isaIndices[i]].data_test > _isaArray[isaIndices[j]].data_test;
+
+                if (maskEqual && (testCountGreater || (testCountEqual && testGreater)))
+                {
+                    tempMaskCount = isaMaskCount[i];
+                    tempTestCount = isaTestCount[i];
+                    tempIndex = isaIndices[i];
+
+                    isaMaskCount[i] = isaMaskCount[j];
+                    isaTestCount[i] = isaTestCount[j];
+                    isaIndices[i] = isaIndices[j];
+
+                    isaMaskCount[j] = tempMaskCount;
+                    isaTestCount[j] = tempTestCount;
+                    isaIndices[j] = tempIndex;
+                }
+            }
+        } 
+
+        std::array<T, S> tempList;
+        for (u32 i = 0; i < S; ++i)
+        {
+            tempList[i] = _isaArray[isaIndices[i]];
+        }
+
+        _isaArray.swap(tempList);
     }
 }

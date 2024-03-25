@@ -38,6 +38,8 @@ namespace br::gba
 
         void debug_log_arm_cycle(const u32& _opcode, const cpu_instruction& _instruction);
 
+        const std::string debug_print_isa(const bool& _armISA);
+
     private:
         /// @brief decode 32-bit arm instruction
         /// @return cycle count
