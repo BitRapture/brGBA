@@ -2,6 +2,8 @@
 #include "typedefs.h"   
 #include <limits>
 #include <array>
+#include <string>
+#include <algorithm>
 
 namespace br::gba
 {
@@ -142,6 +144,24 @@ namespace br::gba
             count += (_data >> i) & 0b1;
         }
         return count;
+    }
+
+    inline const std::string bit_string(const u32& _data, const bool& _trimLeading = false, const bool& _direction = true, const u32& _length = ARM_WORD_BIT_LENGTH)
+    {
+        u32 leadingCount = 0;
+        std::string bitString = "";
+        for (u32 i = 0; i < _length; ++i)
+        {
+            u32 bit = get_bit_bool(_data, 1 << _length - 1 - i);
+            leadingCount = bool_lerp(leadingCount + 1, 0, bool_lerp(bit, (_data >> i) & 0b1, _direction));
+            bitString += bit ? "1" : "0";
+        }
+
+        leadingCount *= _trimLeading;
+
+        bitString = bitString.substr(bool_lerp(0, leadingCount, _direction), 
+                        bool_lerp(bitString.length() - leadingCount, bitString.length(), _direction));
+        return bitString;
     }
 
     template <typename T, u32 S, u32 SB>

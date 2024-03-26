@@ -77,7 +77,9 @@ namespace br::gba
 
         for (u32 i = 0; i < isaSize; ++i)
         {
-            isaList += "i: " + std::to_string(i) + ", " + (_armISA ? armISA[i] : armISA[i]).debug_info + "\n";
+            std::string debugInfo = (_armISA ? armISA[i] : armISA[i]).debug_info;
+            std::string testMask = bit_string((_armISA ? armISA[i] : armISA[i]).data_test, true, false);
+            isaList += "i: " + std::to_string(i) + ", " + debugInfo + ", " + testMask + "\n";
         }
          
         return isaList;;
