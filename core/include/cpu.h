@@ -18,6 +18,17 @@ namespace br::gba
         std::string debug_info;
     };
 
+    enum struct cpu_mode : u32
+    {
+        FIQ = 0,
+        IRQ,
+        SWI,
+        ABORT,
+        UNDEFINED,
+        SYSTEM = 0xFE,
+        USER = 0xFF
+    };
+
     class cpu
     {
     public:
@@ -52,6 +63,10 @@ namespace br::gba
         /// @param _index register index
         /// @return register by reference
         u32& get_register(const u32& _index);
+
+        u32& get_current_spsr(bool& _isUserMode);
+
+        const cpu_mode get_current_mode();
         
         /// @brief check condition from opcode
         /// @param _code condition masked opcode

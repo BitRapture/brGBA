@@ -147,6 +147,55 @@ namespace br::gba
         return programCounter;
     }
 
+    u32& cpu::get_current_spsr(bool& _isUserMode)
+    {
+        cpu_mode mode = get_current_mode();
+        if (mode == cpu_mode::USER || mode == cpu_mode::SYSTEM)
+        {
+            _isUserMode = true;
+            return statusRegister;
+        }
+
+        return savedStatusRegisters[(u32)mode];
+    }
+
+    const cpu_mode cpu::get_current_mode()
+    {
+        u32 modeType = statusRegister & 0b11111;
+        switch (modeType)
+        {
+        case 0b10000: // User
+            return cpu_mode::USER;
+        case 0b10001: // FIQ
+            return cpu_mode::FIQ;
+        case 0b10010: // IRQ
+            return cpu_mode::IRQ;
+        case 0b10011: // SWI
+            return cpu_mode::SWI;
+        case 0b10111: // Abort
+            return cpu_mode::ABORT;
+        case 0b11011: // Undefined
+            return cpu_mode::UNDEFINED;
+        case 0b11111: // Privelleged User
+            return cpu_mode::SYSTEM;
+        }
+
+        u32 compatModeType = statusRegister & 0b10011;
+        switch (modeType)
+        {
+        case 0b00000: // User
+            return cpu_mode::USER;
+        case 0b00001: // FIQ
+            return cpu_mode::FIQ;
+        case 0b00010: // IRQ
+            return cpu_mode::IRQ;
+        case 0b00011: // SWI
+            return cpu_mode::SWI;
+        }
+
+        return cpu_mode::UNDEFINED;
+    }
+
     const bool cpu::check_condition(const u32& _code)
     {
         switch (_code)
@@ -235,6 +284,9 @@ namespace br::gba
 
     const u32 cpu::arm_dataproc(const u32& _opcode)
     {
+        if (!check_condition(_opcode >> ARM_CONDITION_SHIFT))
+            return 0;
+
         bool isImmediate = get_bit_bool(_opcode, 1 << 25);
         bool setStatus = get_bit_bool(_opcode, 1 << 20);
 
@@ -639,7 +691,7 @@ namespace br::gba
 
         u32& regHi = get_register((_opcode >> 16) & 0b1111);
         u32& regLo = get_register((_opcode >> 12) & 0b1111);
-        u64 regHiLo = ((u64)regHi << 32) | regLo;
+        u64 regHiLo = ((u64)regHi << ARM_WORD_BIT_LENGTH) | regLo;
         u64 regS = get_register((_opcode >> 8) & 0b1111);
         u64 regM = get_register(_opcode & 0b1111);
 
@@ -674,13 +726,13 @@ namespace br::gba
 
         if (setRegLo)
         {
-            regHi = result >> 32;
+            regHi = result >> ARM_WORD_BIT_LENGTH;
             regLo = result & 0xFFFFFFFF;
         }
         else
         {
             regHi = result & 0xFFFFFFFF;
-            result <<= 32;
+            result <<= ARM_WORD_BIT_LENGTH;
         }
 
         if (setStatus)
@@ -690,6 +742,54 @@ namespace br::gba
             set_bit(statusRegister, STATUS_REGISTER_C_SHIFT, 0);
             set_bit(statusRegister, STATUS_REGISTER_Z_SHIFT, result == 0);
             set_bit(statusRegister, STATUS_REGISTER_N_SHIFT, result >> 63);
+        }
+
+        return 0;
+    }
+
+    const u32 cpu::arm_psr(const u32& _opcode)
+    {
+        if (!check_condition(_opcode >> ARM_CONDITION_SHIFT))
+            return 0;
+
+        bool isImmediate = get_bit_bool(_opcode, 1 << 25);
+        bool useSPSR = get_bit_bool(_opcode, 1 << 22);
+        bool setPSR = get_bit_bool(_opcode, 1 << 21);
+
+        bool isUserMode = false;
+        u32& currentSPSR = get_current_spsr(isUserMode);
+        if (useSPSR && isUserMode)
+            return 0;
+
+        u32& regD = get_register(_opcode & 0b1111);
+        u32 operand = 0;
+        if (isImmediate)
+        {
+            u32 shift = ((_opcode >> 8) & 0b1111) * 2;
+            operand = _opcode & 0xFF;
+            operand = rotate_right(operand, shift);
+        }
+        else
+        {
+            operand = regD;
+        }
+
+        u32 tempPSR = useSPSR ? currentSPSR : statusRegister;
+        if (setPSR)
+        {
+            bool setFlags = get_bit_bool(_opcode, 1 << 19);
+            bool setControl = get_bit_bool(_opcode, 1 << 16);
+            u32 preserveMask = tempPSR & (STATUS_REGISTER_T | STATUS_PRESERVE_MASK);
+
+            tempPSR = ((STATUS_FLAGS_MASK & operand) * setFlags)
+                    | ((STATUS_CONTROL_MASK & operand) * setControl)
+                    | preserveMask;
+            
+            (useSPSR ? currentSPSR : statusRegister) = tempPSR;
+        }
+        else
+        {
+            regD = tempPSR;
         }
 
         return 0;

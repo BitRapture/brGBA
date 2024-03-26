@@ -27,6 +27,8 @@ namespace br::gba
     inline constexpr u32 STATUS_REGISTER_C = 1 << STATUS_REGISTER_C_SHIFT;
     inline constexpr u32 STATUS_REGISTER_V = 1 << STATUS_REGISTER_V_SHIFT;
     inline constexpr u32 STATUS_REGISTER_T = 1 << STATUS_REGISTER_T_SHIFT;
+    inline constexpr u32 STATUS_FLAGS_MASK = 0xFFF00000;
+    inline constexpr u32 STATUS_CONTROL_MASK = 0x00000FF;
     inline constexpr u32 REGISTER_LIST_LENGTH = 16;
 
     inline constexpr u32 ARM_CONDITION_SHIFT = 28;
