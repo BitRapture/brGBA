@@ -6,7 +6,9 @@ int main()
     br::gba::bus gbaBus;
     br::gba::cpu gbaCPU(gbaBus);
 
-    if (!gbaBus.debug_load_program("../core_test/src/test.o"))
+    gbaCPU.reset();
+
+    if (!gbaBus.debug_load_program("test.o"))
     {
         std::cout << "Could not load test ROM";
         return -1;

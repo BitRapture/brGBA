@@ -15,19 +15,27 @@ namespace br::gba
             return decode_arm_instruction();
     }
 
-    const u32 cpu::debug_cycle_instruction(const u32& _instruction)
+    void cpu::reset()
     {
-        for (u32 i = 0; i < ARM_ISA_COUNT; ++i)
-        {
-            cpu_instruction currentInstruction = armISA[i];
-
-            if ((currentInstruction.data_mask & _instruction) == currentInstruction.data_test)
-                return currentInstruction.execute(_instruction);
-        }
-
-        return 0;
+        trigger_exception(cpu_exception::RESET);
     }
 
+    void cpu::interrupt()
+    {
+        if (get_bit_bool(statusRegister, STATUS_REGISTER_I))
+            return;
+
+        trigger_exception(cpu_exception::IRQ);
+    }
+
+    void cpu::fast_interrupt()
+    {
+        if (get_bit_bool(statusRegister, STATUS_REGISTER_F))
+            return;
+
+        trigger_exception(cpu_exception::FIQ);
+    }
+    
     const std::string cpu::debug_print_status()
     {
         std::stringstream statusInfo;
@@ -38,7 +46,7 @@ namespace br::gba
             statusInfo << std::setfill('0') << std::setw(8) << std::hex << get_register(i);
             statusInfo << '\n';
         }
-        statusInfo << "CSPR: 0x" << std::setfill('0') << std::setw(8) << std::hex << statusRegister;
+        statusInfo << debug_print_status_registers();
 
         return statusInfo.str();
     }
@@ -57,9 +65,6 @@ namespace br::gba
 
     void cpu::debug_log_arm_cycle(const u32& _opcode, const cpu_instruction& _instruction)
     {
-        if (_instruction.data_test == 0x0)
-            return;
-
         std::stringstream statusInfo;
         statusInfo << "Opcode: 0x" << std::setfill('0') << std::setw(8) << std::hex << _opcode;
         statusInfo << "\nInst Test: 0x" << std::setfill('0') << std::setw(8) << std::hex << _instruction.data_test;
@@ -82,7 +87,51 @@ namespace br::gba
             isaList += "i: " + std::to_string(i) + ", " + debugInfo + ", " + testMask + "\n";
         }
          
-        return isaList;;
+        return isaList;
+    }
+
+    const std::string cpu::debug_print_status_registers()
+    {
+        std::array<char, ARM_WORD_BIT_LENGTH> statusSymbols;
+        statusSymbols.fill('-');
+        statusSymbols[STATUS_REGISTER_N_SHIFT] = 'N';
+        statusSymbols[STATUS_REGISTER_Z_SHIFT] = 'Z';
+        statusSymbols[STATUS_REGISTER_C_SHIFT] = 'C';
+        statusSymbols[STATUS_REGISTER_V_SHIFT] = 'V';
+        statusSymbols[STATUS_REGISTER_I_SHIFT] = 'I';
+        statusSymbols[STATUS_REGISTER_F_SHIFT] = 'F';
+        statusSymbols[STATUS_REGISTER_T_SHIFT] = 'T';
+
+        std::array<std::string, 6> statusRegisters;
+        statusRegisters[(u32)cpu_mode::FIQ] = "FIQ SPSR: [";
+        statusRegisters[(u32)cpu_mode::IRQ] = "IRQ SPSR: [";
+        statusRegisters[(u32)cpu_mode::SUPERVISOR] = "SVC SPSR: [";
+        statusRegisters[(u32)cpu_mode::ABORT] = "ABT SPSR: [";
+        statusRegisters[(u32)cpu_mode::UNDEFINED] = "UND SPSR: [";
+        statusRegisters[5] = "CPSR: [";
+        for (u32 i = 0; i < ARM_WORD_BIT_LENGTH; ++i)
+        {
+            u32 x = ARM_WORD_BIT_LENGTH - 1 - i;
+            char symbol = statusSymbols[x];
+
+            if ((x <= 26 && x >= 8) || x <= 4)
+                continue;
+
+            statusRegisters[(u32)cpu_mode::FIQ] += ((savedStatusRegisters[(u32)cpu_mode::FIQ] >> x) & 0b1) ? symbol : '-';
+            statusRegisters[(u32)cpu_mode::IRQ] += ((savedStatusRegisters[(u32)cpu_mode::IRQ] >> x) & 0b1) ? symbol : '-';
+            statusRegisters[(u32)cpu_mode::SUPERVISOR] += ((savedStatusRegisters[(u32)cpu_mode::SUPERVISOR] >> x) & 0b1) ? symbol : '-';
+            statusRegisters[(u32)cpu_mode::ABORT] += ((savedStatusRegisters[(u32)cpu_mode::ABORT] >> x) & 0b1) ? symbol : '-';
+            statusRegisters[(u32)cpu_mode::UNDEFINED] += ((savedStatusRegisters[(u32)cpu_mode::UNDEFINED] >> x) & 0b1) ? symbol : '-';
+            statusRegisters[5] += ((statusRegister >> x) & 0b1) ? symbol : '-';
+        }
+
+        std::string registers;
+        for (u32 i = 0; i < statusRegisters.size(); ++i)
+        {
+            registers += statusRegisters[i] + "]\n";
+        }
+
+        return registers;
     }
 
     const u32 cpu::decode_arm_instruction()
@@ -116,8 +165,14 @@ namespace br::gba
         return 0;
     }
 
-    u32& cpu::get_register(const u32& _index)
+    u32& cpu::get_register(const u32& _index, const bool& _forceUser)
     {
+        cpu_mode mode = get_current_mode();
+        bool is_not_user = mode != cpu_mode::USER && mode != cpu_mode::SYSTEM && !_forceUser;
+        bool is_fiq = mode == cpu_mode::FIQ && !_forceUser;
+    
+        u32 armRegisterOffset = REGISTER_ARM_OFFSET * is_fiq;
+        u32 bankedRegisterOffset = (u32)mode * is_not_user;
         switch (_index)
         {
         case 0:
@@ -170,8 +225,8 @@ namespace br::gba
             return cpu_mode::FIQ;
         case 0b10010: // IRQ
             return cpu_mode::IRQ;
-        case 0b10011: // SWI
-            return cpu_mode::SWI;
+        case 0b10011: // SUPERVISOR
+            return cpu_mode::SUPERVISOR;
         case 0b10111: // Abort
             return cpu_mode::ABORT;
         case 0b11011: // Undefined
@@ -180,20 +235,38 @@ namespace br::gba
             return cpu_mode::SYSTEM;
         }
 
-        u32 compatModeType = statusRegister & 0b10011;
-        switch (modeType)
+        return cpu_mode::UNDEFINED;
+    }
+
+    void cpu::set_current_mode(const cpu_mode& _mode)
+    {
+        u32 modeStatus = 0;
+        switch (_mode)
         {
-        case 0b00000: // User
-            return cpu_mode::USER;
-        case 0b00001: // FIQ
-            return cpu_mode::FIQ;
-        case 0b00010: // IRQ
-            return cpu_mode::IRQ;
-        case 0b00011: // SWI
-            return cpu_mode::SWI;
+        case cpu_mode::USER:
+            modeStatus = 0b10000;
+            break;
+        case cpu_mode::FIQ:
+            modeStatus = 0b10001;
+            break;
+        case cpu_mode::IRQ:
+            modeStatus = 0b10010;
+            break;
+        case cpu_mode::SUPERVISOR:
+            modeStatus = 0b10011;
+            break;
+        case cpu_mode::ABORT:
+            modeStatus = 0b10111;
+            break;
+        case cpu_mode::UNDEFINED:
+            modeStatus = 0b11011;
+            break;
+        case cpu_mode::SYSTEM:
+            modeStatus = 0b11111;
+            break;
         }
 
-        return cpu_mode::UNDEFINED;
+        statusRegister = (statusRegister & 0xFFFFFFE0) | modeStatus;
     }
 
     const bool cpu::check_condition(const u32& _code)
@@ -282,6 +355,54 @@ namespace br::gba
         return shift_operand(_shiftType, _zeroShift, _operand, _shift, tempCarry);
     }
 
+    void cpu::trigger_exception(const cpu_exception& _exception)
+    {
+        u32 previousPSR = statusRegister;
+        u32 exceptionVector = 0;
+        bool disableFIQ = false;
+        switch (_exception)
+        {
+        case cpu_exception::RESET:
+            exceptionVector = EXCEPTION_ADDR_RESET;
+            set_current_mode(cpu_mode::SUPERVISOR);
+            disableFIQ = true;
+            break;
+        case cpu_exception::SWI:
+            exceptionVector = EXCEPTION_ADDR_SWI;
+            set_current_mode(cpu_mode::SUPERVISOR);
+            break;
+        case cpu_exception::PREFETCH_ABORT:
+            exceptionVector = EXCEPTION_ADDR_PREFETCH;
+            set_current_mode(cpu_mode::ABORT);
+            break;
+        case cpu_exception::FIQ:
+            exceptionVector = EXCEPTION_ADDR_FIQ;
+            set_current_mode(cpu_mode::FIQ);
+            disableFIQ = true;
+            break;
+        case cpu_exception::IRQ:
+            exceptionVector = EXCEPTION_ADDR_IRQ;
+            set_current_mode(cpu_mode::IRQ);
+            break;
+        case cpu_exception::UNDEFINED:
+            exceptionVector = EXCEPTION_ADDR_UNDEFINED;
+            set_current_mode(cpu_mode::UNDEFINED);
+            break;
+        }
+
+        get_register(REGISTER_LINK_INDEX) = programCounter;
+        
+        bool isUserMode;
+        get_current_spsr(isUserMode) = previousPSR;
+
+        set_bit(statusRegister, STATUS_REGISTER_T_SHIFT, 0);
+        set_bit(statusRegister, STATUS_REGISTER_I_SHIFT, 1);
+        if (disableFIQ)
+            set_bit(statusRegister, STATUS_REGISTER_F_SHIFT, 1);
+
+        programCounter = exceptionVector;
+    }
+
     const u32 cpu::arm_dataproc(const u32& _opcode)
     {
         if (!check_condition(_opcode >> ARM_CONDITION_SHIFT))
@@ -291,8 +412,11 @@ namespace br::gba
         bool setStatus = get_bit_bool(_opcode, 1 << 20);
 
         u32 dataOpcode = (_opcode >> 21) & 0b1111;
+        u32 regDIndex = (_opcode >> 12) & 0b1111;
+        bool isProgramCounter = regDIndex == REGISTER_PROGRAM_COUNTER_INDEX;
+
         u32 regN = get_register((_opcode >> 16) & 0b1111);
-        u32& regD = get_register((_opcode >> 12) & 0b1111);
+        u32& regD = get_register(regDIndex);
 
         u32 operand = 0;
         u32 carry = 0;
@@ -429,11 +553,19 @@ namespace br::gba
 
         if (setStatus)
         {
-            if (!isLogical)
-                set_bit(statusRegister, STATUS_REGISTER_V_SHIFT, overflow);
-            set_bit(statusRegister, STATUS_REGISTER_C_SHIFT, carry);
-            set_bit(statusRegister, STATUS_REGISTER_Z_SHIFT, result == 0);
-            set_bit(statusRegister, STATUS_REGISTER_N_SHIFT, result >> STATUS_REGISTER_N_SHIFT);
+            if (isProgramCounter)
+            {
+                bool isUserMode;
+                statusRegister = get_current_spsr(isUserMode);
+            }
+            else
+            {
+                if (!isLogical)
+                    set_bit(statusRegister, STATUS_REGISTER_V_SHIFT, overflow);
+                set_bit(statusRegister, STATUS_REGISTER_C_SHIFT, carry);
+                set_bit(statusRegister, STATUS_REGISTER_Z_SHIFT, result == 0);
+                set_bit(statusRegister, STATUS_REGISTER_N_SHIFT, result >> STATUS_REGISTER_N_SHIFT);
+            }
         }
 
         return 0;
@@ -471,7 +603,7 @@ namespace br::gba
             set_bit(statusRegister, STATUS_REGISTER_T_SHIFT, thumbMode);
             
             if (thumbMode)
-                programCounter = regN | 0b1;
+                programCounter = regN - 0b1;
         }
 
         return 0;
@@ -642,10 +774,13 @@ namespace br::gba
         if (!check_condition(_opcode >> ARM_CONDITION_SHIFT))
             return 0;
 
-        bool isPreOffset = get_bit_bool(_opcode, 1 << 24);
-        bool isUserMode = get_bit_bool(_opcode, 1 << 22);
-        bool writeBack = get_bit_bool(_opcode, 1 << 21);
+        bool containsPC = get_bit_bool(_opcode, 1 << 15);
         bool isLoad = get_bit_bool(_opcode, 1 << 20);
+        bool isUserMode = get_bit_bool(_opcode, 1 << 22);
+        bool isPreOffset = get_bit_bool(_opcode, 1 << 24);
+        bool isModeChange = isLoad && containsPC && isUserMode;
+        bool useUserMode = isUserMode && !isModeChange;
+        bool writeBack = get_bit_bool(_opcode, 1 << 21) && !useUserMode;
 
         u32& regN = get_register((_opcode >> 16) & 0b1111);
         u32 regList = _opcode & 0xFFFF;
@@ -662,7 +797,7 @@ namespace br::gba
             {
                 destAddress += bool_lerp(0, ARM_WORD_LENGTH, isPreOffset);
 
-                u32& regData = get_register(i);
+                u32& regData = get_register(i, useUserMode);
                 if (isLoad)
                 {
                     regData = addressBus.read_32(destAddress);
@@ -677,7 +812,13 @@ namespace br::gba
         }
 
         if (writeBack)
-            regN = sub_or_add(regN, offset, offsetSign);;
+            regN = sub_or_add(regN, offset, offsetSign);
+
+        if (isModeChange)
+        {
+            bool userMode;
+            statusRegister = get_current_spsr(userMode);
+        }
 
         return 0;
     }
@@ -756,7 +897,7 @@ namespace br::gba
         bool useSPSR = get_bit_bool(_opcode, 1 << 22);
         bool setPSR = get_bit_bool(_opcode, 1 << 21);
 
-        bool isUserMode = false;
+        bool isUserMode;
         u32& currentSPSR = get_current_spsr(isUserMode);
         if (useSPSR && isUserMode)
             return 0;
@@ -778,7 +919,7 @@ namespace br::gba
         if (setPSR)
         {
             bool setFlags = get_bit_bool(_opcode, 1 << 19);
-            bool setControl = get_bit_bool(_opcode, 1 << 16);
+            bool setControl = get_bit_bool(_opcode, 1 << 16) && get_current_mode() != cpu_mode::USER;
             u32 preserveMask = tempPSR & (STATUS_REGISTER_T | STATUS_PRESERVE_MASK);
 
             tempPSR = ((STATUS_FLAGS_MASK & operand) * setFlags)
@@ -795,21 +936,31 @@ namespace br::gba
         return 0;
     }
 
+    const u32 cpu::arm_soft_interrupt(const u32& _opcode)
+    {
+        trigger_exception(cpu_exception::SWI);
+
+        return 0;
+    }
+
     void cpu::create_arm_isa()
     {
-        armISA[0] = { ARM_DATAPROC_1_MASK, ARM_DATAPROC_1_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),         "Data Proc 1" };
-        armISA[1] = { ARM_DATAPROC_2_MASK, ARM_DATAPROC_2_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),         "Data Proc 2" };
-        armISA[2] = { ARM_DATAPROC_3_MASK, ARM_DATAPROC_3_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),         "Data Proc 3" };
-        armISA[3] = { ARM_MULTIPLY_1_MASK, ARM_MULTIPLY_1_TEST, std::bind(&cpu::arm_multiply, this, std::placeholders::_1),         "Multiply 1" };
-        armISA[4] = { ARM_MULTIPLY_2_MASK, ARM_MULTIPLY_2_TEST, std::bind(&cpu::arm_multiply, this, std::placeholders::_1),         "Multiply 2" };
-        armISA[5] = { ARM_BRANCHING_1_MASK, ARM_BRANCHING_1_TEST, std::bind(&cpu::arm_branch_ex, this, std::placeholders::_1),      "Branch Ex" };
-        armISA[6] = { ARM_BRANCHING_2_MASK, ARM_BRANCHING_2_TEST, std::bind(&cpu::arm_branch, this, std::placeholders::_1),         "Branch" };
-        armISA[7] = { ARM_TRANSFER_1_MASK, ARM_TRANSFER_1_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1),     "Transfer Single 1" };
-        armISA[8] = { ARM_TRANSFER_2_MASK, ARM_TRANSFER_2_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1),     "Transfer Single 2" };
-        armISA[9] = { ARM_TRANSFER_3_MASK, ARM_TRANSFER_3_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1),       "Transfer Half 1" };
-        armISA[10] = { ARM_TRANSFER_4_MASK, ARM_TRANSFER_4_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1),      "Transfer Half 2" };
-        armISA[11] = { ARM_TRANSFER_5_MASK, ARM_TRANSFER_5_TEST, std::bind(&cpu::arm_trans_swap, this, std::placeholders::_1),      "Transfer Swap" };
-        armISA[12] = { ARM_TRANSFER_6_MASK, ARM_TRANSFER_6_TEST, std::bind(&cpu::arm_trans_block, this, std::placeholders::_1),     "Transfer Block" };
+        armISA[0] = { ARM_DATAPROC_1_MASK, ARM_DATAPROC_1_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),                     "Data Proc 1" };
+        armISA[1] = { ARM_DATAPROC_2_MASK, ARM_DATAPROC_2_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),                     "Data Proc 2" };
+        armISA[2] = { ARM_DATAPROC_3_MASK, ARM_DATAPROC_3_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),                     "Data Proc 3" };
+        armISA[3] = { ARM_MULTIPLY_1_MASK, ARM_MULTIPLY_1_TEST, std::bind(&cpu::arm_multiply, this, std::placeholders::_1),                     "Multiply 1" };
+        armISA[4] = { ARM_MULTIPLY_2_MASK, ARM_MULTIPLY_2_TEST, std::bind(&cpu::arm_multiply, this, std::placeholders::_1),                     "Multiply 2" };
+        armISA[5] = { ARM_BRANCHING_1_MASK, ARM_BRANCHING_1_TEST, std::bind(&cpu::arm_branch_ex, this, std::placeholders::_1),                  "Branch Ex" };
+        armISA[6] = { ARM_BRANCHING_2_MASK, ARM_BRANCHING_2_TEST, std::bind(&cpu::arm_branch, this, std::placeholders::_1),                     "Branch" };
+        armISA[7] = { ARM_TRANSFER_1_MASK, ARM_TRANSFER_1_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1),                 "Transfer Single 1" };
+        armISA[8] = { ARM_TRANSFER_2_MASK, ARM_TRANSFER_2_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1),                 "Transfer Single 2" };
+        armISA[9] = { ARM_TRANSFER_3_MASK, ARM_TRANSFER_3_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1),                   "Transfer Half 1" };
+        armISA[10] = { ARM_TRANSFER_4_MASK, ARM_TRANSFER_4_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1),                  "Transfer Half 2" };
+        armISA[11] = { ARM_TRANSFER_5_MASK, ARM_TRANSFER_5_TEST, std::bind(&cpu::arm_trans_swap, this, std::placeholders::_1),                  "Transfer Swap" };
+        armISA[12] = { ARM_TRANSFER_6_MASK, ARM_TRANSFER_6_TEST, std::bind(&cpu::arm_trans_block, this, std::placeholders::_1),                 "Transfer Block" };
+        armISA[13] = { ARM_STATUSTRANS_1_MASK, ARM_STATUSTRANS_1_TEST, std::bind(&cpu::arm_psr, this, std::placeholders::_1),                   "Status Transfer 1" };
+        armISA[14] = { ARM_STATUSTRANS_2_MASK, ARM_STATUSTRANS_2_TEST, std::bind(&cpu::arm_psr, this, std::placeholders::_1),                   "Status Transfer 2" };
+        armISA[15] = { ARM_SOFTINTERRUPT_MASK, ARM_SOFTINTERRUPT_TEST, std::bind(&cpu::arm_soft_interrupt, this, std::placeholders::_1),        "Software Interrupt" };
 
         sort_isa_array<cpu_instruction, ARM_ISA_COUNT, ARM_WORD_BIT_LENGTH>(armISA);
     }
@@ -836,8 +987,7 @@ namespace br::gba
     }
 
     cpu::cpu(bus& _addressBus)
-        : addressBus{ _addressBus },
-        bankedRegisterOffset{ 0 }, armRegisterOffset{ 0 }
+        : addressBus{ _addressBus }
     {
         reset_registers();
         create_arm_isa();

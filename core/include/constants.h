@@ -7,7 +7,7 @@
 
 namespace br::gba
 {
-    inline constexpr u32 ARM_ISA_COUNT = 13;
+    inline constexpr u32 ARM_ISA_COUNT = 16;
 
     inline constexpr u32 ARM_WORD_LENGTH = 4;
     inline constexpr u32 ARM_WORD_BIT_LENGTH = 32;
@@ -15,22 +15,36 @@ namespace br::gba
 
     inline constexpr u32 REGISTER_LINK_INDEX = 14;
     inline constexpr u32 REGISTER_PROGRAM_COUNTER_INDEX = 15;
+    inline constexpr u32 REGISTER_ARM_OFFSET = 5;
+    inline constexpr u32 REGISTER_LIST_LENGTH = 16;
 
     inline constexpr u32 STATUS_REGISTER_N_SHIFT = 31;
     inline constexpr u32 STATUS_REGISTER_Z_SHIFT = 30;
     inline constexpr u32 STATUS_REGISTER_C_SHIFT = 29;
     inline constexpr u32 STATUS_REGISTER_V_SHIFT = 28;
+    inline constexpr u32 STATUS_REGISTER_I_SHIFT = 7;
+    inline constexpr u32 STATUS_REGISTER_F_SHIFT = 6;
     inline constexpr u32 STATUS_REGISTER_T_SHIFT = 5;
 
     inline constexpr u32 STATUS_REGISTER_N = 1 << STATUS_REGISTER_N_SHIFT;
     inline constexpr u32 STATUS_REGISTER_Z = 1 << STATUS_REGISTER_Z_SHIFT;
     inline constexpr u32 STATUS_REGISTER_C = 1 << STATUS_REGISTER_C_SHIFT;
     inline constexpr u32 STATUS_REGISTER_V = 1 << STATUS_REGISTER_V_SHIFT;
+    inline constexpr u32 STATUS_REGISTER_I = 1 << STATUS_REGISTER_I_SHIFT;
+    inline constexpr u32 STATUS_REGISTER_F = 1 << STATUS_REGISTER_F_SHIFT;
     inline constexpr u32 STATUS_REGISTER_T = 1 << STATUS_REGISTER_T_SHIFT;
+
     inline constexpr u32 STATUS_FLAGS_MASK = 0xFFF00000;
     inline constexpr u32 STATUS_CONTROL_MASK = 0x00000FF;
     inline constexpr u32 STATUS_PRESERVE_MASK = ~(STATUS_FLAGS_MASK | STATUS_CONTROL_MASK);
-    inline constexpr u32 REGISTER_LIST_LENGTH = 16;
+
+    inline constexpr u32 EXCEPTION_ADDR_RESET = 0x00;
+    inline constexpr u32 EXCEPTION_ADDR_UNDEFINED = 0x04;
+    inline constexpr u32 EXCEPTION_ADDR_SWI = 0x08;
+    inline constexpr u32 EXCEPTION_ADDR_PREFETCH = 0x0C;
+    inline constexpr u32 EXCEPTION_ADDR_DATA = 0x10;
+    inline constexpr u32 EXCEPTION_ADDR_IRQ = 0x18;
+    inline constexpr u32 EXCEPTION_ADDR_FIQ = 0x1C;
 
     inline constexpr u32 ARM_CONDITION_SHIFT = 28;
     
@@ -60,6 +74,12 @@ namespace br::gba
     inline constexpr u32 ARM_MULTIPLY_1_TEST = 0b0000'000000'00'0000'0000'0000'1001'0000;
     inline constexpr u32 ARM_MULTIPLY_2_MASK = 0b0000'11111'000'0000'0000'0000'1111'0000;
     inline constexpr u32 ARM_MULTIPLY_2_TEST = 0b0000'00001'000'0000'0000'0000'1001'0000;
+    inline constexpr u32 ARM_STATUSTRANS_1_MASK = 0b0000'11111'0'11'0000'0000'0000'00000000;
+    inline constexpr u32 ARM_STATUSTRANS_1_TEST = 0b0000'00110'0'10'0000'0000'0000'00000000;
+    inline constexpr u32 ARM_STATUSTRANS_2_MASK = 0b0000'11111'00'1'0000'0000'11111111'0000;
+    inline constexpr u32 ARM_STATUSTRANS_2_TEST = 0b0000'00010'00'0'0000'0000'00000000'0000;
+    inline constexpr u32 ARM_SOFTINTERRUPT_MASK = 0b0000'1111'000000000000000000000000;
+    inline constexpr u32 ARM_SOFTINTERRUPT_TEST = 0b0000'1111'000000000000000000000000;
 
     inline constexpr bool test_overflow_pos(const u32& _x, const u32& _y)
     {
@@ -94,7 +114,7 @@ namespace br::gba
     inline constexpr bool test_carry_neg(const u32& _x, const u32& _y)
     {
         u64 temp = (u64)_x - (u64)_y;
-        return temp > UINT32_MAX;
+        return !(temp > UINT32_MAX);
     }
 
     inline constexpr bool test_carry_pos(const u32& _x, const u32& _y, const u32& _carry)
@@ -106,7 +126,7 @@ namespace br::gba
     inline constexpr bool test_carry_neg(const u32& _x, const u32& _y, const u32& _carry)
     {
         u64 temp = (u64)_x - (u64)_y + (u64)_carry - 1;
-        return temp > UINT32_MAX;
+        return !(temp > UINT32_MAX);
     }
 
     inline constexpr void set_bit(u32& _data, const u32& _shift, const u32& _bit)

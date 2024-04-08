@@ -22,11 +22,22 @@ namespace br::gba
     {
         FIQ = 0,
         IRQ,
-        SWI,
+        SUPERVISOR,
         ABORT,
         UNDEFINED,
         SYSTEM = 0xFE,
         USER = 0xFF
+    };
+
+    enum struct cpu_exception : u32
+    {
+        RESET,
+        UNDEFINED,
+        SWI,
+        PREFETCH_ABORT,
+        DATA_ABORT,
+        IRQ,
+        FIQ
     };
 
     class cpu
@@ -36,11 +47,16 @@ namespace br::gba
         /// @return cycle count
         const u32 cycle();
 
-        /// @brief cycle cpu with an instruction, for debug purposes
-        /// @param _instruction instruction to test
-        /// @return cycle count
-        const u32 debug_cycle_instruction(const u32& _instruction);
+        /// @brief reset the cpu
+        void reset();
 
+        /// @brief trigger an external interrupt
+        void interrupt();
+
+        /// @brief trigger a fast external interrupt
+        void fast_interrupt();
+
+    public:
         /// @brief print status information of the cpu, for debug purposes
         /// @return formatted status information
         const std::string debug_print_status();
@@ -50,6 +66,8 @@ namespace br::gba
         void debug_log_arm_cycle(const u32& _opcode, const cpu_instruction& _instruction);
 
         const std::string debug_print_isa(const bool& _armISA);
+
+        const std::string debug_print_status_registers();
 
     private:
         /// @brief decode 32-bit arm instruction
@@ -61,12 +79,20 @@ namespace br::gba
 
         /// @brief get registers 0 - 15
         /// @param _index register index
+        /// @param _forceUser retreive user registers instead of current banked registers
         /// @return register by reference
-        u32& get_register(const u32& _index);
+        u32& get_register(const u32& _index, const bool& _forceUser = false);
 
+        /// @brief get saved program status register
+        /// @param _isUserMode true when cpu is in user/elevated user mode
+        /// @return reference to spsr when not in user mode, otherwise the current psr
         u32& get_current_spsr(bool& _isUserMode);
 
+        /// @brief get the current elevation mode of the cpu
+        /// @return cpu_mode enum of current mode
         const cpu_mode get_current_mode();
+
+        void set_current_mode(const cpu_mode& _mode);
         
         /// @brief check condition from opcode
         /// @param _code condition masked opcode
@@ -75,6 +101,8 @@ namespace br::gba
 
         const u32 shift_operand(const u32& _shiftType, const bool& _zeroShift, const u32& _operand, const u32& _shift, u32& _carryFlag);
         const u32 shift_operand(const u32& _shiftType, const bool& _zeroShift, const u32& _operand, const u32& _shift);
+
+        void trigger_exception(const cpu_exception& _exception);
 
     private:
         const u32 arm_dataproc(const u32& _opcode);
@@ -86,6 +114,7 @@ namespace br::gba
         const u32 arm_trans_block(const u32& _opcode);
         const u32 arm_multiply(const u32& _opcode);
         const u32 arm_psr(const u32& _opcode);
+        const u32 arm_soft_interrupt(const u32& _opcode);
 
     private:
         /// @brief setup the armISA instruction map
@@ -114,11 +143,6 @@ namespace br::gba
         u32 statusRegister;
 
     private:
-        // either 0, or 5 for fiq banked registers
-        u32 armRegisterOffset;
-        // used for link and stack pointer banked registers
-        u32 bankedRegisterOffset;
-
         // arm instruction set array
         std::array<cpu_instruction, ARM_ISA_COUNT> armISA;
 
