@@ -2,3 +2,4 @@
 build/
 core_test/src/test.asm
 core_test/src/test.o
+core_test/test
