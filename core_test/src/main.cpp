@@ -15,6 +15,7 @@ int main()
     }
 
     std::cout << gbaCPU.debug_print_isa(true);
+    std::cout << gbaCPU.debug_print_isa(false);
     
     for (br::u32 i = 0; i < 48; ++i)
         gbaCPU.cycle();

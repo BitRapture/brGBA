@@ -77,13 +77,13 @@ namespace br::gba
 
     const std::string cpu::debug_print_isa(const bool& _armISA)
     {
-        u32 isaSize = _armISA ? ARM_ISA_COUNT : 0;
+        u32 isaSize = _armISA ? ARM_ISA_COUNT : THUMB_ISA_COUNT;
         std::string isaList;
 
         for (u32 i = 0; i < isaSize; ++i)
         {
-            std::string debugInfo = (_armISA ? armISA[i] : armISA[i]).debug_info;
-            std::string testMask = bit_string((_armISA ? armISA[i] : armISA[i]).data_test, true, false);
+            std::string debugInfo = (_armISA ? armISA[i] : thumbISA[i]).debug_info;
+            std::string testMask = bit_string((_armISA ? armISA[i] : thumbISA[i]).data_test, true, false);
             isaList += "i: " + std::to_string(i) + ", " + debugInfo + ", " + testMask + "\n";
         }
          
@@ -101,34 +101,39 @@ namespace br::gba
         statusSymbols[STATUS_REGISTER_I_SHIFT] = 'I';
         statusSymbols[STATUS_REGISTER_F_SHIFT] = 'F';
         statusSymbols[STATUS_REGISTER_T_SHIFT] = 'T';
+        statusSymbols[0] = '1';
+        statusSymbols[1] = '1';
+        statusSymbols[2] = '1';
+        statusSymbols[3] = '1';
+        statusSymbols[4] = '1';
 
         std::array<std::string, 6> statusRegisters;
-        statusRegisters[0] = "CPSR: [";
         statusRegisters[(u32)cpu_mode::FIQ] = "FIQ SPSR: [";
         statusRegisters[(u32)cpu_mode::IRQ] = "IRQ SPSR: [";
         statusRegisters[(u32)cpu_mode::SUPERVISOR] = "SVC SPSR: [";
         statusRegisters[(u32)cpu_mode::ABORT] = "ABT SPSR: [";
         statusRegisters[(u32)cpu_mode::UNDEFINED] = "UND SPSR: [";
+        statusRegisters[5] = "CPSR: [";
         for (u32 i = 0; i < ARM_WORD_BIT_LENGTH; ++i)
         {
             u32 x = ARM_WORD_BIT_LENGTH - 1 - i;
             char symbol = statusSymbols[x];
 
-            if ((x <= 26 && x >= 8) || x <= 4)
+            if ((x <= 26 && x >= 8))
                 continue;
 
-            statusRegisters[0] += ((statusRegister >> x) & 0b1) ? symbol : '-';
             statusRegisters[(u32)cpu_mode::FIQ] += ((savedStatusRegisters[(u32)cpu_mode::FIQ] >> x) & 0b1) ? symbol : '-';
             statusRegisters[(u32)cpu_mode::IRQ] += ((savedStatusRegisters[(u32)cpu_mode::IRQ] >> x) & 0b1) ? symbol : '-';
             statusRegisters[(u32)cpu_mode::SUPERVISOR] += ((savedStatusRegisters[(u32)cpu_mode::SUPERVISOR] >> x) & 0b1) ? symbol : '-';
             statusRegisters[(u32)cpu_mode::ABORT] += ((savedStatusRegisters[(u32)cpu_mode::ABORT] >> x) & 0b1) ? symbol : '-';
             statusRegisters[(u32)cpu_mode::UNDEFINED] += ((savedStatusRegisters[(u32)cpu_mode::UNDEFINED] >> x) & 0b1) ? symbol : '-';
+            statusRegisters[5] += ((statusRegister >> x) & 0b1) ? symbol : '-';
         }
 
         std::string registers;
         for (u32 i = 0; i < statusRegisters.size(); ++i)
         {
-            registers += statusRegisters[statusRegisters.size() - 1 - i] + "]\n";
+            registers += statusRegisters[i] + "]\n";
         }
 
         return registers;
@@ -162,6 +167,21 @@ namespace br::gba
         u16 opcode = addressBus.read_16(programCounter);
         programCounter += THUMB_WORD_LENGTH;
 
+        for (u32 i = 0; i < THUMB_ISA_COUNT; ++i)
+        {
+            cpu_instruction currentInstruction = thumbISA[i];
+
+            if ((currentInstruction.data_mask & opcode) == currentInstruction.data_test)
+            {
+                u32 cycleCount = 0;
+                cycleCount = currentInstruction.execute(opcode);
+                debug_log_arm_cycle(opcode, currentInstruction);
+                return cycleCount;
+            }
+        }
+
+        debug_log_arm_cycle(opcode, {});
+
         return 0;
     }
 
@@ -172,7 +192,7 @@ namespace br::gba
         bool is_fiq = mode == cpu_mode::FIQ && !_forceUser;
     
         u32 armRegisterOffset = REGISTER_ARM_OFFSET * is_fiq;
-        u32 bankedRegisterOffset = (u32)mode * is_not_user;
+        u32 bankedRegisterOffset = ((u32)mode + 1) * is_not_user;
         switch (_index)
         {
         case 0:
@@ -602,8 +622,7 @@ namespace br::gba
             
             set_bit(statusRegister, STATUS_REGISTER_T_SHIFT, thumbMode);
             
-            if (thumbMode)
-                programCounter = regN - 0b1;
+            programCounter = regN + ARM_WORD_LENGTH - 0b1;
         }
 
         return 0;
@@ -943,6 +962,22 @@ namespace br::gba
         return 0;
     }
 
+    const u32 cpu::thumb_shift(const u32& _opcode)
+    {
+        const u32 conditionAlways = 0xE << 28;
+        const u32 moveOp = 0xD << 21;
+        const u32 setStatus = 1 << 20;
+        u32 offset = (_opcode << 1) & (0b11111 << 7);
+        u32 shiftOp = (_opcode >> 6) & (0b11 << 5);
+        u32 regS = (_opcode >> 3) & 0b111;
+        u32 regD = (_opcode & 0b111) << 12;
+
+        u32 opcode = conditionAlways | moveOp | setStatus | regD | offset | shiftOp | regS;
+        arm_dataproc(opcode);
+
+        return 0;
+    }
+
     void cpu::create_arm_isa()
     {
         armISA[0] = { ARM_DATAPROC_1_MASK, ARM_DATAPROC_1_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),                     "Data Proc 1" };
@@ -963,6 +998,13 @@ namespace br::gba
         armISA[15] = { ARM_SOFTINTERRUPT_MASK, ARM_SOFTINTERRUPT_TEST, std::bind(&cpu::arm_soft_interrupt, this, std::placeholders::_1),        "Software Interrupt" };
 
         sort_isa_array<cpu_instruction, ARM_ISA_COUNT, ARM_WORD_BIT_LENGTH>(armISA);
+    }
+
+    void cpu::create_thumb_isa()
+    {
+        thumbISA[0] = { THUMB_SHIFT_MASK, THUMB_SHIFT_TEST, std::bind(&cpu::thumb_shift, this, std::placeholders::_1),                         "Shift" };
+    
+        sort_isa_array<cpu_instruction, THUMB_ISA_COUNT, THUMB_WORD_BIT_LENGTH>(thumbISA);
     }
 
     void cpu::reset_registers()
@@ -991,5 +1033,6 @@ namespace br::gba
     {
         reset_registers();
         create_arm_isa();
+        create_thumb_isa();
     }
 }

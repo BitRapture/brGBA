@@ -20,7 +20,7 @@ namespace br::gba
 
     enum struct cpu_mode : u32
     {
-        FIQ = 1,
+        FIQ = 0,
         IRQ,
         SUPERVISOR,
         ABORT,
@@ -117,8 +117,13 @@ namespace br::gba
         const u32 arm_soft_interrupt(const u32& _opcode);
 
     private:
+        const u32 thumb_shift(const u32& _opcode);
+
+    private:
         /// @brief setup the armISA instruction map
         void create_arm_isa();
+
+        void create_thumb_isa();
 
         /// @brief reset all registers to zero
         void reset_registers();
@@ -145,6 +150,8 @@ namespace br::gba
     private:
         // arm instruction set array
         std::array<cpu_instruction, ARM_ISA_COUNT> armISA;
+        // thumb instruction set array
+        std::array<cpu_instruction, THUMB_ISA_COUNT> thumbISA;
 
     private:
         // connection to gba bus for memory reading and writing
