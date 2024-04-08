@@ -103,12 +103,12 @@ namespace br::gba
         statusSymbols[STATUS_REGISTER_T_SHIFT] = 'T';
 
         std::array<std::string, 6> statusRegisters;
+        statusRegisters[0] = "CPSR: [";
         statusRegisters[(u32)cpu_mode::FIQ] = "FIQ SPSR: [";
         statusRegisters[(u32)cpu_mode::IRQ] = "IRQ SPSR: [";
         statusRegisters[(u32)cpu_mode::SUPERVISOR] = "SVC SPSR: [";
         statusRegisters[(u32)cpu_mode::ABORT] = "ABT SPSR: [";
         statusRegisters[(u32)cpu_mode::UNDEFINED] = "UND SPSR: [";
-        statusRegisters[5] = "CPSR: [";
         for (u32 i = 0; i < ARM_WORD_BIT_LENGTH; ++i)
         {
             u32 x = ARM_WORD_BIT_LENGTH - 1 - i;
@@ -117,18 +117,18 @@ namespace br::gba
             if ((x <= 26 && x >= 8) || x <= 4)
                 continue;
 
+            statusRegisters[0] += ((statusRegister >> x) & 0b1) ? symbol : '-';
             statusRegisters[(u32)cpu_mode::FIQ] += ((savedStatusRegisters[(u32)cpu_mode::FIQ] >> x) & 0b1) ? symbol : '-';
             statusRegisters[(u32)cpu_mode::IRQ] += ((savedStatusRegisters[(u32)cpu_mode::IRQ] >> x) & 0b1) ? symbol : '-';
             statusRegisters[(u32)cpu_mode::SUPERVISOR] += ((savedStatusRegisters[(u32)cpu_mode::SUPERVISOR] >> x) & 0b1) ? symbol : '-';
             statusRegisters[(u32)cpu_mode::ABORT] += ((savedStatusRegisters[(u32)cpu_mode::ABORT] >> x) & 0b1) ? symbol : '-';
             statusRegisters[(u32)cpu_mode::UNDEFINED] += ((savedStatusRegisters[(u32)cpu_mode::UNDEFINED] >> x) & 0b1) ? symbol : '-';
-            statusRegisters[5] += ((statusRegister >> x) & 0b1) ? symbol : '-';
         }
 
         std::string registers;
         for (u32 i = 0; i < statusRegisters.size(); ++i)
         {
-            registers += statusRegisters[i] + "]\n";
+            registers += statusRegisters[statusRegisters.size() - 1 - i] + "]\n";
         }
 
         return registers;

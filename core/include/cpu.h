@@ -20,7 +20,7 @@ namespace br::gba
 
     enum struct cpu_mode : u32
     {
-        FIQ = 0,
+        FIQ = 1,
         IRQ,
         SUPERVISOR,
         ABORT,
