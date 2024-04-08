@@ -63,7 +63,7 @@ namespace br::gba
 
         void debug_save_log(const std::string& _filePath);
 
-        void debug_log_arm_cycle(const u32& _opcode, const cpu_instruction& _instruction);
+        void debug_log_cycle(const u32& _opcode, const cpu_instruction& _instruction);
 
         const std::string debug_print_isa(const bool& _armISA);
 
@@ -118,6 +118,7 @@ namespace br::gba
 
     private:
         const u32 thumb_shift(const u32& _opcode);
+        const u32 thumb_data_reg(const u32& _opcode);
 
     private:
         /// @brief setup the armISA instruction map

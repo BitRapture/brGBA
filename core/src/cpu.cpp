@@ -63,7 +63,7 @@ namespace br::gba
         file.close();
     }
 
-    void cpu::debug_log_arm_cycle(const u32& _opcode, const cpu_instruction& _instruction)
+    void cpu::debug_log_cycle(const u32& _opcode, const cpu_instruction& _instruction)
     {
         std::stringstream statusInfo;
         statusInfo << "Opcode: 0x" << std::setfill('0') << std::setw(8) << std::hex << _opcode;
@@ -152,12 +152,12 @@ namespace br::gba
             {
                 u32 cycleCount = 0;
                 cycleCount = currentInstruction.execute(opcode);
-                debug_log_arm_cycle(opcode, currentInstruction);
+                debug_log_cycle(opcode, currentInstruction);
                 return cycleCount;
             }
         }
 
-        debug_log_arm_cycle(opcode, {});
+        debug_log_cycle(opcode, {});
 
         return 0;
     }
@@ -175,12 +175,12 @@ namespace br::gba
             {
                 u32 cycleCount = 0;
                 cycleCount = currentInstruction.execute(opcode);
-                debug_log_arm_cycle(opcode, currentInstruction);
+                debug_log_cycle(opcode, currentInstruction);
                 return cycleCount;
             }
         }
 
-        debug_log_arm_cycle(opcode, {});
+        debug_log_cycle(opcode, {});
 
         return 0;
     }
@@ -354,7 +354,7 @@ namespace br::gba
                 break;
             case 0x3: // ROR
                 _carryFlag = operand & 0b1;
-                if (_zeroShift) // RCR
+                if (_zeroShift && !get_bit_bool(statusRegister, STATUS_REGISTER_T)) // RCR
                 {
                     operand >>= 1;
                     operand |= (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) << 31;
@@ -967,6 +967,7 @@ namespace br::gba
         const u32 conditionAlways = 0xE << 28;
         const u32 moveOp = 0xD << 21;
         const u32 setStatus = 1 << 20;
+
         u32 offset = (_opcode << 1) & (0b11111 << 7);
         u32 shiftOp = (_opcode >> 6) & (0b11 << 5);
         u32 regS = (_opcode >> 3) & 0b111;
@@ -978,31 +979,49 @@ namespace br::gba
         return 0;
     }
 
+    const u32 cpu::thumb_data_reg(const u32& _opcode)
+    {
+        const u32 conditionAlways = 0xE << 28;
+        const u32 setStatus = 1 << 20;
+        
+        u32 isImmediate = (_opcode << 15) & (1 << 25);
+        u32 dataOp = (4 >> ((_opcode >> 9) & 0b1)) << 21;
+        u32 operand = (_opcode >> 6) & 0b111;
+        u32 regS = (_opcode << 13) & (0b111 << 16);
+        u32 regD = (_opcode & 0b111) << 12;
+
+        u32 opcode = conditionAlways | isImmediate | dataOp | setStatus | regS | regD | operand;
+        arm_dataproc(opcode);
+
+        return 0;
+    }
+
     void cpu::create_arm_isa()
     {
-        armISA[0] = { ARM_DATAPROC_1_MASK, ARM_DATAPROC_1_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),                     "Data Proc 1" };
-        armISA[1] = { ARM_DATAPROC_2_MASK, ARM_DATAPROC_2_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),                     "Data Proc 2" };
-        armISA[2] = { ARM_DATAPROC_3_MASK, ARM_DATAPROC_3_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),                     "Data Proc 3" };
-        armISA[3] = { ARM_MULTIPLY_1_MASK, ARM_MULTIPLY_1_TEST, std::bind(&cpu::arm_multiply, this, std::placeholders::_1),                     "Multiply 1" };
-        armISA[4] = { ARM_MULTIPLY_2_MASK, ARM_MULTIPLY_2_TEST, std::bind(&cpu::arm_multiply, this, std::placeholders::_1),                     "Multiply 2" };
-        armISA[5] = { ARM_BRANCHING_1_MASK, ARM_BRANCHING_1_TEST, std::bind(&cpu::arm_branch_ex, this, std::placeholders::_1),                  "Branch Ex" };
-        armISA[6] = { ARM_BRANCHING_2_MASK, ARM_BRANCHING_2_TEST, std::bind(&cpu::arm_branch, this, std::placeholders::_1),                     "Branch" };
-        armISA[7] = { ARM_TRANSFER_1_MASK, ARM_TRANSFER_1_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1),                 "Transfer Single 1" };
-        armISA[8] = { ARM_TRANSFER_2_MASK, ARM_TRANSFER_2_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1),                 "Transfer Single 2" };
-        armISA[9] = { ARM_TRANSFER_3_MASK, ARM_TRANSFER_3_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1),                   "Transfer Half 1" };
-        armISA[10] = { ARM_TRANSFER_4_MASK, ARM_TRANSFER_4_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1),                  "Transfer Half 2" };
-        armISA[11] = { ARM_TRANSFER_5_MASK, ARM_TRANSFER_5_TEST, std::bind(&cpu::arm_trans_swap, this, std::placeholders::_1),                  "Transfer Swap" };
-        armISA[12] = { ARM_TRANSFER_6_MASK, ARM_TRANSFER_6_TEST, std::bind(&cpu::arm_trans_block, this, std::placeholders::_1),                 "Transfer Block" };
-        armISA[13] = { ARM_STATUSTRANS_1_MASK, ARM_STATUSTRANS_1_TEST, std::bind(&cpu::arm_psr, this, std::placeholders::_1),                   "Status Transfer 1" };
-        armISA[14] = { ARM_STATUSTRANS_2_MASK, ARM_STATUSTRANS_2_TEST, std::bind(&cpu::arm_psr, this, std::placeholders::_1),                   "Status Transfer 2" };
-        armISA[15] = { ARM_SOFTINTERRUPT_MASK, ARM_SOFTINTERRUPT_TEST, std::bind(&cpu::arm_soft_interrupt, this, std::placeholders::_1),        "Software Interrupt" };
+        armISA[0] = { ARM_DATAPROC_1_MASK, ARM_DATAPROC_1_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),                     "ARM Data Proc 1" };
+        armISA[1] = { ARM_DATAPROC_2_MASK, ARM_DATAPROC_2_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),                     "ARM Data Proc 2" };
+        armISA[2] = { ARM_DATAPROC_3_MASK, ARM_DATAPROC_3_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),                     "ARM Data Proc 3" };
+        armISA[3] = { ARM_MULTIPLY_1_MASK, ARM_MULTIPLY_1_TEST, std::bind(&cpu::arm_multiply, this, std::placeholders::_1),                     "ARM Multiply 1" };
+        armISA[4] = { ARM_MULTIPLY_2_MASK, ARM_MULTIPLY_2_TEST, std::bind(&cpu::arm_multiply, this, std::placeholders::_1),                     "ARM Multiply 2" };
+        armISA[5] = { ARM_BRANCHING_1_MASK, ARM_BRANCHING_1_TEST, std::bind(&cpu::arm_branch_ex, this, std::placeholders::_1),                  "ARM Branch Ex" };
+        armISA[6] = { ARM_BRANCHING_2_MASK, ARM_BRANCHING_2_TEST, std::bind(&cpu::arm_branch, this, std::placeholders::_1),                     "ARM Branch" };
+        armISA[7] = { ARM_TRANSFER_1_MASK, ARM_TRANSFER_1_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1),                 "ARM Transfer Single 1" };
+        armISA[8] = { ARM_TRANSFER_2_MASK, ARM_TRANSFER_2_TEST, std::bind(&cpu::arm_trans_single, this, std::placeholders::_1),                 "ARM Transfer Single 2" };
+        armISA[9] = { ARM_TRANSFER_3_MASK, ARM_TRANSFER_3_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1),                   "ARM Transfer Half 1" };
+        armISA[10] = { ARM_TRANSFER_4_MASK, ARM_TRANSFER_4_TEST, std::bind(&cpu::arm_trans_half, this, std::placeholders::_1),                  "ARM Transfer Half 2" };
+        armISA[11] = { ARM_TRANSFER_5_MASK, ARM_TRANSFER_5_TEST, std::bind(&cpu::arm_trans_swap, this, std::placeholders::_1),                  "ARM Transfer Swap" };
+        armISA[12] = { ARM_TRANSFER_6_MASK, ARM_TRANSFER_6_TEST, std::bind(&cpu::arm_trans_block, this, std::placeholders::_1),                 "ARM Transfer Block" };
+        armISA[13] = { ARM_STATUSTRANS_1_MASK, ARM_STATUSTRANS_1_TEST, std::bind(&cpu::arm_psr, this, std::placeholders::_1),                   "ARM Status Transfer 1" };
+        armISA[14] = { ARM_STATUSTRANS_2_MASK, ARM_STATUSTRANS_2_TEST, std::bind(&cpu::arm_psr, this, std::placeholders::_1),                   "ARM Status Transfer 2" };
+        armISA[15] = { ARM_SOFTINTERRUPT_MASK, ARM_SOFTINTERRUPT_TEST, std::bind(&cpu::arm_soft_interrupt, this, std::placeholders::_1),        "ARM Software Interrupt" };
 
         sort_isa_array<cpu_instruction, ARM_ISA_COUNT, ARM_WORD_BIT_LENGTH>(armISA);
     }
 
     void cpu::create_thumb_isa()
     {
-        thumbISA[0] = { THUMB_SHIFT_MASK, THUMB_SHIFT_TEST, std::bind(&cpu::thumb_shift, this, std::placeholders::_1),                         "Shift" };
+        thumbISA[0] = { THUMB_SHIFT_MASK, THUMB_SHIFT_TEST, std::bind(&cpu::thumb_shift, this, std::placeholders::_1),                           "THUMB Shift" };
+        thumbISA[1] = { THUMB_DATA_REG_MASK, THUMB_DATA_REG_TEST, std::bind(&cpu::thumb_data_reg, this, std::placeholders::_1),                  "THUMB Data Proc Reg (ADD/SUB)" };
     
         sort_isa_array<cpu_instruction, THUMB_ISA_COUNT, THUMB_WORD_BIT_LENGTH>(thumbISA);
     }

@@ -8,7 +8,7 @@
 namespace br::gba
 {
     inline constexpr u32 ARM_ISA_COUNT = 16;
-    inline constexpr u32 THUMB_ISA_COUNT = 1;
+    inline constexpr u32 THUMB_ISA_COUNT = 2;
 
     inline constexpr u32 ARM_WORD_LENGTH = 4;
     inline constexpr u32 ARM_WORD_BIT_LENGTH = 32;
@@ -85,6 +85,8 @@ namespace br::gba
 
     inline constexpr u16 THUMB_SHIFT_MASK = 0b111'00'00000'000'000;
     inline constexpr u16 THUMB_SHIFT_TEST = 0b000'00'00000'000'000;
+    inline constexpr u16 THUMB_DATA_REG_MASK = 0b11111'00'000'000'000;
+    inline constexpr u16 THUMB_DATA_REG_TEST = 0b00011'00'000'000'000;
 
     inline constexpr bool test_overflow_pos(const u32& _x, const u32& _y)
     {
