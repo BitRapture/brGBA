@@ -83,7 +83,7 @@ namespace br::gba
         for (u32 i = 0; i < isaSize; ++i)
         {
             std::string debugInfo = (_armISA ? armISA[i] : thumbISA[i]).debug_info;
-            std::string testMask = bit_string((_armISA ? armISA[i] : thumbISA[i]).data_test, true, false);
+            std::string testMask = bit_string((_armISA ? armISA[i] : thumbISA[i]).data_test, true, false, _armISA ? ARM_WORD_BIT_LENGTH : THUMB_WORD_BIT_LENGTH);
             isaList += "i: " + std::to_string(i) + ", " + debugInfo + ", " + testMask + "\n";
         }
          
@@ -996,6 +996,31 @@ namespace br::gba
         return 0;
     }
 
+    const u32 cpu::thumb_data_imm(const u32& _opcode)
+    {
+        const u32 conditionAlways = 0xE << 28;
+        const u32 isImmediate = 1 << 25;
+        const u32 setStatus = 1 << 20;
+
+        u32 isArithmetic = (_opcode >> 12) & 0b1;
+        u32 isLogical = !isArithmetic;
+        u32 dataOpLo = (_opcode >> 11) & 0b1;
+        u32 arithmeticOp = 4 >> dataOpLo;
+        u32 logicalOp = bool_lerp(0xD, 0xA, dataOpLo);
+        u32 dataOp = bool_lerp(arithmeticOp, logicalOp, isLogical) << 21;
+        u32 regD = (_opcode << 4) & (0b111 << 12);
+        u32 regD2 = regD << 4;
+        u32 operand = _opcode & 0xFF;
+
+        regD *= (isLogical && !dataOpLo) || isArithmetic;
+        regD2 *= (isLogical && dataOpLo) || isArithmetic;
+
+        u32 opcode = conditionAlways | isImmediate | dataOp | setStatus | regD2 | regD | operand;
+        arm_dataproc(opcode);
+
+        return 0;
+    }
+
     void cpu::create_arm_isa()
     {
         armISA[0] = { ARM_DATAPROC_1_MASK, ARM_DATAPROC_1_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),                     "ARM Data Proc 1" };
@@ -1022,6 +1047,7 @@ namespace br::gba
     {
         thumbISA[0] = { THUMB_SHIFT_MASK, THUMB_SHIFT_TEST, std::bind(&cpu::thumb_shift, this, std::placeholders::_1),                           "THUMB Shift" };
         thumbISA[1] = { THUMB_DATA_REG_MASK, THUMB_DATA_REG_TEST, std::bind(&cpu::thumb_data_reg, this, std::placeholders::_1),                  "THUMB Data Proc Reg (ADD/SUB)" };
+        thumbISA[2] = { THUMB_DATA_IMM_MASK, THUMB_DATA_IMM_TEST, std::bind(&cpu::thumb_data_imm, this, std::placeholders::_1),                  "THUMB Data Proc Imm (ADD/SUB/TEST)" };
     
         sort_isa_array<cpu_instruction, THUMB_ISA_COUNT, THUMB_WORD_BIT_LENGTH>(thumbISA);
     }
