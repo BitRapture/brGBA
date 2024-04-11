@@ -1002,8 +1002,8 @@ namespace br::gba
         const u32 isImmediate = 1 << 25;
         const u32 setStatus = 1 << 20;
 
-        u32 isArithmetic = (_opcode >> 12) & 0b1;
-        u32 isLogical = !isArithmetic;
+        bool isArithmetic = (_opcode >> 12) & 0b1;
+        bool isLogical = !isArithmetic;
         u32 dataOpLo = (_opcode >> 11) & 0b1;
         u32 arithmeticOp = 4 >> dataOpLo;
         u32 logicalOp = bool_lerp(0xD, 0xA, dataOpLo);
@@ -1017,6 +1017,84 @@ namespace br::gba
 
         u32 opcode = conditionAlways | isImmediate | dataOp | setStatus | regD2 | regD | operand;
         arm_dataproc(opcode);
+
+        return 0;
+    }
+
+    const u32 cpu::thumb_data_alu(const u32& _opcode)
+    {
+        const u32 conditionAlways = 0xE << 28;
+        const u32 setStatus = 1 << 20;
+
+        u32 aluType = (_opcode >> 6) & 0b1111;
+        u32 dataOp = aluType;
+        u32 shiftOp = 0;
+        bool hasRegN = true;
+        bool isShift = false;
+        bool isNeg = false;
+        bool isMultiply = false;
+        switch (aluType)
+        {
+        case 0x2: // LSL
+            isShift = true;
+            shiftOp = 0;
+            dataOp = 0xD;
+            break;
+        case 0x3: // LSR
+            isShift = true;
+            shiftOp = 1;
+            dataOp = 0xD;
+            break;
+        case 0x4: // ASR
+            isShift = true;
+            shiftOp = 2;
+            dataOp = 0xD;
+            break;
+        case 0x7: // ROR
+            isShift = true;
+            shiftOp = 3;
+            dataOp = 0xD;
+            break;
+        case 0x9: // NEG
+            isNeg = true;
+            dataOp = 0x3;
+            break;
+        case 0xD: // MUL
+            isMultiply = true;
+            break;
+        case 0xF: // MVN
+            hasRegN = false;
+            break;
+        }
+
+        hasRegN = hasRegN && !isShift;
+
+        u32 opcode = conditionAlways | setStatus;
+        if (isMultiply)
+        {
+            u32 regS = (_opcode << 5) & (0b111 << 8);
+            u32 regD = (_opcode & 0b111) << 16;
+            u32 regD2 = _opcode & 0b111;
+
+            opcode |= regD | regS | regD2;
+            arm_multiply(opcode);
+        }
+        else
+        {
+            u32 isImmediate = isNeg << 25;
+            u32 isShiftByReg = isShift << 4;
+            u32 regShift = ((_opcode << 5) & (0b111 << 8)) * isShift;
+            u32 regN = bool_lerp((_opcode & 0b111) << 16, (_opcode << 13) & (0b111 << 16), isNeg) * hasRegN;
+            u32 regD = ((_opcode & 0b111) << 12);
+            u32 regOperand = bool_lerp((_opcode >> 3) & 0b111, _opcode & 0b111, isShift) * !isNeg;
+
+            dataOp <<= 21;
+            shiftOp <<= 5;
+
+            opcode |= isImmediate | dataOp | regN | regD | regShift | shiftOp | isShiftByReg | regOperand;
+            arm_dataproc(opcode);
+        }
+
 
         return 0;
     }
@@ -1048,6 +1126,7 @@ namespace br::gba
         thumbISA[0] = { THUMB_SHIFT_MASK, THUMB_SHIFT_TEST, std::bind(&cpu::thumb_shift, this, std::placeholders::_1),                           "THUMB Shift" };
         thumbISA[1] = { THUMB_DATA_REG_MASK, THUMB_DATA_REG_TEST, std::bind(&cpu::thumb_data_reg, this, std::placeholders::_1),                  "THUMB Data Proc Reg (ADD/SUB)" };
         thumbISA[2] = { THUMB_DATA_IMM_MASK, THUMB_DATA_IMM_TEST, std::bind(&cpu::thumb_data_imm, this, std::placeholders::_1),                  "THUMB Data Proc Imm (ADD/SUB/TEST)" };
+        thumbISA[3] = { THUMB_DATA_ALU_MASK, THUMB_DATA_ALU_TEST, std::bind(&cpu::thumb_data_alu, this, std::placeholders::_1),                  "THUMB Data Proc ALU" };
     
         sort_isa_array<cpu_instruction, THUMB_ISA_COUNT, THUMB_WORD_BIT_LENGTH>(thumbISA);
     }

@@ -120,6 +120,7 @@ namespace br::gba
         const u32 thumb_shift(const u32& _opcode);
         const u32 thumb_data_reg(const u32& _opcode);
         const u32 thumb_data_imm(const u32& _opcode);
+        const u32 thumb_data_alu(const u32& _opcode);
 
     private:
         /// @brief setup the armISA instruction map
