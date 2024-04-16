@@ -1152,6 +1152,42 @@ namespace br::gba
         return 0;
     }
 
+    const u32 cpu::thumb_trans_relative(const u32& _opcode)
+    {
+        u32& regD = get_register((_opcode >> 8) & 0b111);
+        u32 offset = (_opcode & 0xFF) * 4;
+
+        regD = addressBus.read_32(programCounter + offset);
+
+        return 0;
+    }
+
+    const u32 cpu::thumb_trans_single(const u32& _opcode)
+    {
+        u32& regD = get_register(_opcode & 0b111);
+        u32 regB = get_register((_opcode >> 3) & 0b111);
+        u32 offset = get_register((_opcode >> 6) & 0b111);
+
+        u32 transType = (_opcode >> 10) & 0b11;
+        u32 address = regB + offset;
+        switch (transType)
+        {
+        case 0: // STR
+            addressBus.write_32(address, regD);
+            break;
+        case 1: // STRB
+            addressBus.write_8(address, regD);
+            break;
+        case 2: // LDR
+            regD = addressBus.read_32(address);
+            break;
+        case 3: // LDRB
+            regD = addressBus.read_8(address);
+        }
+
+        return 0;
+    }
+
     void cpu::create_arm_isa()
     {
         armISA[0] = { ARM_DATAPROC_1_MASK, ARM_DATAPROC_1_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),                     "ARM Data Proc 1" };
