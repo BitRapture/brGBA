@@ -354,7 +354,7 @@ namespace br::gba
                 break;
             case 0x3: // ROR
                 _carryFlag = operand & 0b1;
-                if (_zeroShift && !get_bit_bool(statusRegister, STATUS_REGISTER_T)) // RCR
+                if (_zeroShift) // RCR
                 {
                     operand >>= 1;
                     operand |= (u32)get_bit_bool(statusRegister, STATUS_REGISTER_C) << 31;
@@ -1095,6 +1095,59 @@ namespace br::gba
             arm_dataproc(opcode);
         }
 
+        return 0;
+    }
+
+    const u32 cpu::thumb_data_hi(const u32& _opcode)
+    {
+        const u32 conditionAlways = 0xE << 28;
+        
+        u32 regS = ((_opcode >> 3) & 0b111) | ((_opcode >> 3) & 0b1000);
+        u32 regD = (_opcode & 0b111) | ((_opcode >> 4) & 0b1000);
+
+        u32 opType = (_opcode >> 8) & 0b11;
+        u32 dataOp = 0;
+        bool isBranch = false;
+        bool isCMP = false;
+        bool isMOV = false;
+        switch (opType)
+        {
+        case 0x0: // ADD
+            dataOp = 0x4;
+            break;
+        case 0x1: // CMP + set status
+            dataOp = 0xA;
+            isCMP = true;
+            break;
+        case 0x2: // MOV / NOP
+            dataOp = 0xD;
+            isMOV = true;
+            break;
+        case 0x3: // BX
+            isBranch = true;
+            break;
+        }
+
+        if (isBranch)
+        {
+            u32 regN = get_register(regS);
+            bool armMode = regN & 0b1;
+            
+            set_bit(statusRegister, STATUS_REGISTER_T_SHIFT, armMode);
+            
+            programCounter = regN;
+        }
+        else
+        {
+            u32 regD2 = (regD << 12) * !isCMP;
+            u32 regN = (regD << 16) * !isMOV;
+
+            u32 setStatus = isCMP << 20;
+            dataOp <<= 21;
+
+            u32 opcode = conditionAlways | dataOp | setStatus | regN | regD2 | regS;
+            arm_dataproc(opcode);
+        }
 
         return 0;
     }
@@ -1127,6 +1180,7 @@ namespace br::gba
         thumbISA[1] = { THUMB_DATA_REG_MASK, THUMB_DATA_REG_TEST, std::bind(&cpu::thumb_data_reg, this, std::placeholders::_1),                  "THUMB Data Proc Reg (ADD/SUB)" };
         thumbISA[2] = { THUMB_DATA_IMM_MASK, THUMB_DATA_IMM_TEST, std::bind(&cpu::thumb_data_imm, this, std::placeholders::_1),                  "THUMB Data Proc Imm (ADD/SUB/TEST)" };
         thumbISA[3] = { THUMB_DATA_ALU_MASK, THUMB_DATA_ALU_TEST, std::bind(&cpu::thumb_data_alu, this, std::placeholders::_1),                  "THUMB Data Proc ALU" };
+        thumbISA[4] = { THUMB_DATA_HI_MASK, THUMB_DATA_HI_TEST, std::bind(&cpu::thumb_data_hi, this, std::placeholders::_1),                     "THUMB Data Proc HI" };
     
         sort_isa_array<cpu_instruction, THUMB_ISA_COUNT, THUMB_WORD_BIT_LENGTH>(thumbISA);
     }
