@@ -1152,6 +1152,44 @@ namespace br::gba
         return 0;
     }
 
+    const u32 cpu::thumb_data_adr(const u32& _opcode)
+    {
+        u32& regD = get_register((_opcode >> 8) & 0b111);
+        u32 offset = (_opcode & 0xFF) * 4;
+
+        u32 dataType = (_opcode >> 11) & 0b1;
+        switch (dataType)
+        {
+        case 0: // ADD PC
+            regD = ((programCounter + ARM_WORD_LENGTH) & ~THUMB_WORD_LENGTH) + offset;
+            break;
+        case 1: // ADD SP
+            regD = get_register(REGISTER_PROGRAM_COUNTER_INDEX) + offset;
+            break;
+        }
+
+        return 0;
+    }
+
+    const u32 cpu::thumb_data_stack(const u32& _opcode)
+    {
+        u32& stackPointer = get_register(REGISTER_STACK_POINTER_INDEX);
+        u32 offset = (_opcode & 0b1111111) * 4;
+
+        u32 dataType = (_opcode >> 7) & 0b1;
+        switch (dataType)
+        {
+        case 0: // ADD SP POS
+            stackPointer = stackPointer + offset;
+            break;
+        case 1: // ADD SP NEG
+            stackPointer = stackPointer - offset;
+            break;
+        }
+
+        return 0;
+    }
+
     const u32 cpu::thumb_trans_relative(const u32& _opcode)
     {
         u32& regD = get_register((_opcode >> 8) & 0b111);
@@ -1183,6 +1221,49 @@ namespace br::gba
             break;
         case 3: // LDRB
             regD = addressBus.read_8(address);
+            break;
+        }
+
+        return 0;
+    }
+
+    const u32 cpu::thumb_trans_half(const u32& _opcode)
+    {
+        u32& regD = get_register(_opcode & 0b111);
+        u32 regB = get_register((_opcode >> 3) & 0b111);
+        u32 offset = ((_opcode >> 6) & 0b11111) * 2;
+
+        u32 transType = (_opcode >> 11) & 0b1;
+        u32 address = regB + offset;
+        switch (transType)
+        {
+        case 0: // STRH
+            addressBus.write_16(address, regD);
+            break;
+        case 1: // LDRH
+            regD = addressBus.read_16(address);
+            break;
+        }
+
+        return 0;
+    }
+
+    const u32 cpu::thumb_trans_stack(const u32& _opcode)
+    {
+        u32& regD = get_register((_opcode >> 8) & 0b111);
+        u32 stackPointer = get_register(REGISTER_STACK_POINTER_INDEX);
+        u32 offset = (_opcode & 0xFF) * 4;
+        
+        u32 transType = (_opcode >> 11) & 0b1;
+        u32 address = stackPointer + offset;
+        switch (transType)
+        {
+        case 0: // STR SP
+            addressBus.write_32(address, regD);
+            break;
+        case 1: // LDR SP
+            regD = addressBus.read_32(address);
+            break;
         }
 
         return 0;
@@ -1212,11 +1293,13 @@ namespace br::gba
 
     void cpu::create_thumb_isa()
     {
-        thumbISA[0] = { THUMB_SHIFT_MASK, THUMB_SHIFT_TEST, std::bind(&cpu::thumb_shift, this, std::placeholders::_1),                           "THUMB Shift" };
-        thumbISA[1] = { THUMB_DATA_REG_MASK, THUMB_DATA_REG_TEST, std::bind(&cpu::thumb_data_reg, this, std::placeholders::_1),                  "THUMB Data Proc Reg (ADD/SUB)" };
-        thumbISA[2] = { THUMB_DATA_IMM_MASK, THUMB_DATA_IMM_TEST, std::bind(&cpu::thumb_data_imm, this, std::placeholders::_1),                  "THUMB Data Proc Imm (ADD/SUB/TEST)" };
-        thumbISA[3] = { THUMB_DATA_ALU_MASK, THUMB_DATA_ALU_TEST, std::bind(&cpu::thumb_data_alu, this, std::placeholders::_1),                  "THUMB Data Proc ALU" };
-        thumbISA[4] = { THUMB_DATA_HI_MASK, THUMB_DATA_HI_TEST, std::bind(&cpu::thumb_data_hi, this, std::placeholders::_1),                     "THUMB Data Proc HI" };
+        thumbISA[0] = { THUMB_SHIFT_MASK, THUMB_SHIFT_TEST, std::bind(&cpu::thumb_shift, this, std::placeholders::_1),                                  "THUMB Shift" };
+        thumbISA[1] = { THUMB_DATA_REG_MASK, THUMB_DATA_REG_TEST, std::bind(&cpu::thumb_data_reg, this, std::placeholders::_1),                         "THUMB Data Proc Reg (ADD/SUB)" };
+        thumbISA[2] = { THUMB_DATA_IMM_MASK, THUMB_DATA_IMM_TEST, std::bind(&cpu::thumb_data_imm, this, std::placeholders::_1),                         "THUMB Data Proc Imm (ADD/SUB/TEST)" };
+        thumbISA[3] = { THUMB_DATA_ALU_MASK, THUMB_DATA_ALU_TEST, std::bind(&cpu::thumb_data_alu, this, std::placeholders::_1),                         "THUMB Data Proc ALU" };
+        thumbISA[4] = { THUMB_DATA_HI_MASK, THUMB_DATA_HI_TEST, std::bind(&cpu::thumb_data_hi, this, std::placeholders::_1),                            "THUMB Data Proc HI" };
+        thumbISA[5] = { THUMB_TRANS_RELATIVE_MASK, THUMB_TRANS_RELATIVE_TEST, std::bind(&cpu::thumb_trans_relative, this, std::placeholders::_1),       "THUMB Data Transfer PC Relative" };
+        thumbISA[6] = { THUMB_TRANS_SINGLE_MASK, THUMB_TRANS_SINGLE_TEST, std::bind(&cpu::thumb_trans_single, this, std::placeholders::_1),             "THUMB Data Transfer Single" };
     
         sort_isa_array<cpu_instruction, THUMB_ISA_COUNT, THUMB_WORD_BIT_LENGTH>(thumbISA);
     }

@@ -8,13 +8,14 @@
 namespace br::gba
 {
     inline constexpr u32 ARM_ISA_COUNT = 16;
-    inline constexpr u32 THUMB_ISA_COUNT = 5;
+    inline constexpr u32 THUMB_ISA_COUNT = 7;
 
     inline constexpr u32 ARM_WORD_LENGTH = 4;
     inline constexpr u32 ARM_WORD_BIT_LENGTH = 32;
     inline constexpr u32 THUMB_WORD_LENGTH = 2;
     inline constexpr u32 THUMB_WORD_BIT_LENGTH = 16;
 
+    inline constexpr u32 REGISTER_STACK_POINTER_INDEX = 13;
     inline constexpr u32 REGISTER_LINK_INDEX = 14;
     inline constexpr u32 REGISTER_PROGRAM_COUNTER_INDEX = 15;
     inline constexpr u32 REGISTER_ARM_OFFSET = 5;
@@ -93,6 +94,10 @@ namespace br::gba
     inline constexpr u16 THUMB_DATA_ALU_TEST = 0b010000'0000'000'000;
     inline constexpr u16 THUMB_DATA_HI_MASK = 0b111111'00'00'000'000;
     inline constexpr u16 THUMB_DATA_HI_TEST = 0b010001'00'00'000'000;
+    inline constexpr u16 THUMB_TRANS_RELATIVE_MASK = 0b11111'000'00000000;
+    inline constexpr u16 THUMB_TRANS_RELATIVE_TEST = 0b01001'000'00000000;
+    inline constexpr u16 THUMB_TRANS_SINGLE_MASK = 0b1111'00'1'000'000'000;
+    inline constexpr u16 THUMB_TRANS_SINGLE_TEST = 0b0101'00'0'000'000'000;
 
     inline constexpr bool test_overflow_pos(const u32& _x, const u32& _y)
     {
