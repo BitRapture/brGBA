@@ -1269,6 +1269,86 @@ namespace br::gba
         return 0;
     }
 
+    const u32 cpu::thumb_trans_stackproc(const u32& _opcode)
+    {
+        const u32 writeBack = 1 << 21;
+        const u32 regBase = REGISTER_STACK_POINTER_INDEX << 16;
+
+        bool isStore = (_opcode >> 11) & 0b1;
+        bool hasExtraReg = (_opcode >> 8) & 0b1;
+        
+        u32 prePost = !isStore << 24;
+        u32 upDown = isStore << 23;
+        u32 accessOp = isStore << 20;
+        u32 regExtra = (1 << bool_lerp(REGISTER_LINK_INDEX, REGISTER_PROGRAM_COUNTER_INDEX, isStore)) * hasExtraReg;
+        u32 regList = (_opcode & 0xFF) | regExtra;
+
+        u32 opcode = prePost | upDown | writeBack | accessOp | regBase | regList;
+        arm_trans_block(opcode);
+
+        return 0;
+    }
+
+    const u32 cpu::thumb_trans_block(const u32& _opcode)
+    {
+        const u32 writeBack = 1 << 21;
+        const u32 upDown = 1 << 23;
+
+        u32 accessOp = (_opcode << 9) & (1 << 20);
+        u32 regBase = (_opcode << 8) & (0b111 << 16);
+        u32 regList = _opcode & 0xFF;
+
+        u32 opcode = upDown | writeBack | accessOp | regBase | regList;
+        arm_trans_block(opcode);
+
+        return 0;
+    }
+
+    const u32 cpu::thumb_cond_branch(const u32& _opcode)
+    {
+        bool condition = check_condition((_opcode >> 8) & 0xF);
+
+        s32 offset = (s8)(_opcode & 0xFF) * 2;
+        programCounter = bool_lerp(programCounter, programCounter + offset, condition);
+
+        return 0;
+    }
+
+    const u32 cpu::thumb_branch(const u32& _opcode)
+    {
+        s32 offset = (s32)((s16)((_opcode & 0x07FF) << 5)) >> 4;
+        programCounter += offset;
+
+        return 0;
+    }
+
+    const u32 cpu::thumb_branch_link(const u32& _opcode)
+    {
+        const bool isSecond = (_opcode >> 11) & 0b1;
+
+        u32& regLink = get_register(REGISTER_LINK_INDEX);
+        u32 address = _opcode & 0x7FF;
+        if (isSecond)
+        {
+            u32 tempPC = programCounter;
+            programCounter = regLink + (address << 1);
+            regLink = tempPC + THUMB_WORD_LENGTH;
+        }
+        else
+        {
+            regLink = programCounter + THUMB_WORD_LENGTH + (address << 12);
+        }
+
+        return 0;
+    }
+
+    const u32 cpu::thumb_soft_interrupt(const u32& _opcode)
+    {
+        trigger_exception(cpu_exception::SWI);
+
+        return 0;
+    }
+
     void cpu::create_arm_isa()
     {
         armISA[0] = { ARM_DATAPROC_1_MASK, ARM_DATAPROC_1_TEST, std::bind(&cpu::arm_dataproc, this, std::placeholders::_1),                     "ARM Data Proc 1" };

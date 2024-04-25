@@ -129,6 +129,11 @@ namespace br::gba
         const u32 thumb_trans_half(const u32& _opcode);
         const u32 thumb_trans_stack(const u32& _opcode);
         const u32 thumb_trans_stackproc(const u32& _opcode);
+        const u32 thumb_trans_block(const u32& _opcode);
+        const u32 thumb_cond_branch(const u32& _opcode);
+        const u32 thumb_branch(const u32& _opcode);
+        const u32 thumb_branch_link(const u32& _opcode);
+        const u32 thumb_soft_interrupt(const u32& _opcode);
 
     private:
         /// @brief setup the armISA instruction map
