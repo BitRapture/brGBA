@@ -128,6 +128,7 @@ namespace br::gba
         const u32 thumb_trans_single(const u32& _opcode);
         const u32 thumb_trans_half(const u32& _opcode);
         const u32 thumb_trans_stack(const u32& _opcode);
+        const u32 thumb_trans_stackproc(const u32& _opcode);
 
     private:
         /// @brief setup the armISA instruction map
