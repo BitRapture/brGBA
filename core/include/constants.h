@@ -8,7 +8,7 @@
 namespace br::gba
 {
     inline constexpr u32 ARM_ISA_COUNT = 16;
-    inline constexpr u32 THUMB_ISA_COUNT = 7;
+    inline constexpr u32 THUMB_ISA_COUNT = 19;
 
     inline constexpr u32 ARM_WORD_LENGTH = 4;
     inline constexpr u32 ARM_WORD_BIT_LENGTH = 32;
@@ -94,10 +94,34 @@ namespace br::gba
     inline constexpr u16 THUMB_DATA_ALU_TEST = 0b010000'0000'000'000;
     inline constexpr u16 THUMB_DATA_HI_MASK = 0b111111'00'00'000'000;
     inline constexpr u16 THUMB_DATA_HI_TEST = 0b010001'00'00'000'000;
+    inline constexpr u16 THUMB_DATA_ADR_MASK = 0b1111'0'000'00000000;
+    inline constexpr u16 THUMB_DATA_ADR_TEST = 0b1010'0'000'00000000;
+    inline constexpr u16 THUMB_DATA_STACK_MASK = 0b11111111'00000000;
+    inline constexpr u16 THUMB_DATA_STACK_TEST = 0b10110000'00000000;
     inline constexpr u16 THUMB_TRANS_RELATIVE_MASK = 0b11111'000'00000000;
     inline constexpr u16 THUMB_TRANS_RELATIVE_TEST = 0b01001'000'00000000;
     inline constexpr u16 THUMB_TRANS_SINGLE_MASK = 0b1111'00'1'000'000'000;
     inline constexpr u16 THUMB_TRANS_SINGLE_TEST = 0b0101'00'0'000'000'000;
+    inline constexpr u16 THUMB_TRANS_EXTENDED_MASK = 0b1111'00'1'000'000'000;
+    inline constexpr u16 THUMB_TRANS_EXTENDED_TEST = 0b0101'00'1'000'000'000;
+    inline constexpr u16 THUMB_TRANS_IMM_MASK = 0b111'00'00000'000'000;
+    inline constexpr u16 THUMB_TRANS_IMM_TEST = 0b011'00'00000'000'000;
+    inline constexpr u16 THUMB_TRANS_HALF_MASK = 0b1111'0'00000'000'000;
+    inline constexpr u16 THUMB_TRANS_HALF_TEST = 0b1000'0'00000'000'000;
+    inline constexpr u16 THUMB_TRANS_STACK_MASK = 0b1111'0'000'00000000;
+    inline constexpr u16 THUMB_TRANS_STACK_TEST = 0b1001'0'000'00000000;
+    inline constexpr u16 THUMB_TRANS_STACKPROC_MASK = 0b1111'0'11'0'00000000;
+    inline constexpr u16 THUMB_TRANS_STACKPROC_TEST = 0b1011'0'10'0'00000000;
+    inline constexpr u16 THUMB_TRANS_BLOCK_MASK = 0b1111'0'000'00000000;
+    inline constexpr u16 THUMB_TRANS_BLOCK_TEST = 0b1100'0'000'00000000;
+    inline constexpr u16 THUMB_COND_BRANCH_MASK = 0b1111'0000'00000000;
+    inline constexpr u16 THUMB_COND_BRANCH_TEST = 0b1101'0000'00000000;
+    inline constexpr u16 THUMB_SOFTINTERRUPT_MASK = 0b11111111'00000000;
+    inline constexpr u16 THUMB_SOFTINTERRUPT_TEST = 0b11011111'00000000;
+    inline constexpr u16 THUMB_BRANCH_MASK = 0b11111'00000000000;
+    inline constexpr u16 THUMB_BRANCH_TEST = 0b11100'00000000000;
+    inline constexpr u16 THUMB_BRANCH_LINK_MASK = 0b1111'0'00000000000;
+    inline constexpr u16 THUMB_BRANCH_LINK_TEST = 0b1111'0'00000000000;
 
     inline constexpr bool test_overflow_pos(const u32& _x, const u32& _y)
     {

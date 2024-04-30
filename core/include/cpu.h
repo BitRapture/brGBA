@@ -126,6 +126,8 @@ namespace br::gba
         const u32 thumb_data_stack(const u32& _opcode);
         const u32 thumb_trans_relative(const u32& _opcode);
         const u32 thumb_trans_single(const u32& _opcode);
+        const u32 thumb_trans_extended(const u32& _opcode);
+        const u32 thumb_trans_immediate(const u32& _opcode);
         const u32 thumb_trans_half(const u32& _opcode);
         const u32 thumb_trans_stack(const u32& _opcode);
         const u32 thumb_trans_stackproc(const u32& _opcode);
