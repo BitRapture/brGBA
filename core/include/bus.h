@@ -1,5 +1,7 @@
 #pragma once
 #include "typedefs.h"
+#include "bus_constants.h"
+#include <array>
 #include <vector>
 #include <string>
 #include <unordered_map>
@@ -36,11 +38,25 @@ namespace br::gba
         void write_8(const u32& _address, const u8& _data);
 
     public:
+        const bool load_bios(const std::string& _filePath);
+
+        const bool load_rom(const std::string& _filePath);
+
         const bool debug_load_program(const std::string& _filePath);
 
         const std::string debug_print_memory(const u32& _address);
 
     private:
+        std::vector<u8> memoryBIOS;
+        std::vector<u8> boardWRAM;
+        std::vector<u8> chipWRAM;
+        std::vector<u8> ioRegisters;
+        std::vector<u8> memoryROM;
+        std::vector<u8> memorySRAM;
+
         std::vector<u8> programData;
+
+    public:
+        bus();
     };
 }

@@ -6,13 +6,22 @@ int main()
     br::gba::bus gbaBus;
     br::gba::cpu gbaCPU(gbaBus);
 
-    gbaCPU.reset();
+    if (!gbaBus.load_bios("bios.rom"))
+    {
+        std::cout << "Could not load bios ROM";
+        return -1;
+    }
+    
+    gbaBus.write_32(0x0, 0xE3A00302);
+    gbaBus.write_32(0x4, 0xE12FFF10);
 
-    if (!gbaBus.debug_load_program("test.o"))
+    if (!gbaBus.load_rom("test.o"))
     {
         std::cout << "Could not load test ROM";
         return -1;
     }
+
+    gbaCPU.reset();
 
     std::cout << gbaCPU.debug_print_isa(true) << '\n';
     std::cout << gbaCPU.debug_print_isa(false);

@@ -1,6 +1,6 @@
 #pragma once
 #include "typedefs.h"
-#include "constants.h"
+#include "cpu_constants.h"
 #include <functional>
 #include <array>
 #include <string>

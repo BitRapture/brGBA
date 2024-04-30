@@ -1,6 +1,5 @@
 #include "../include/cpu.h"
 #include "../include/bus.h"
-#include "../include/constants.h"
 #include <sstream>
 #include <iomanip>
 #include <fstream>
@@ -622,7 +621,7 @@ namespace br::gba
             
             set_bit(statusRegister, STATUS_REGISTER_T_SHIFT, thumbMode);
             
-            programCounter = regN + ARM_WORD_LENGTH - 0b1;
+            programCounter = regN - thumbMode;
         }
 
         return 0;

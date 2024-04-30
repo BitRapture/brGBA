@@ -22,10 +22,27 @@ namespace br::gba
 
     const u8 bus::read_8(const u32& _address)
     {
-        if (_address >= programData.size())
-            return 0;
+        u32 relativeAdress = _address;
 
-        return programData[_address];
+        if (test_address_region<MEMORY_BIOS_SIZE, MEMORY_BIOS_ADDR>(_address, relativeAdress))
+            return memoryBIOS[relativeAdress];
+
+        if (test_address_region<MEMORY_BOARD_WRAM_SIZE, MEMORY_BOARD_WRAM_ADDR>(_address, relativeAdress))
+            return boardWRAM[relativeAdress];    
+        
+        if (test_address_region<MEMORY_CHIP_WRAM_SIZE, MEMORY_CHIP_WRAM_ADDR>(_address, relativeAdress))
+            return chipWRAM[relativeAdress];
+
+        if (test_address_region<MEMORY_IO_REGISTERS_SIZE, MEMORY_IO_REGISTERS_ADDR>(_address, relativeAdress))
+            return ioRegisters[relativeAdress];
+
+        if (test_address_region<MEMORY_ROM_TOTAL_SIZE, MEMORY_ROM_0_ADDR>(_address, relativeAdress))
+            return memoryROM[relativeAdress];
+
+        if (test_address_region<MEMORY_SRAM_SIZE, MEMORY_SRAM_ADDR>(_address, relativeAdress))
+            return memorySRAM[relativeAdress];        
+
+        return 0;    
     }
 
     void bus::write_32(const u32& _address, const u32& _data)
@@ -42,10 +59,63 @@ namespace br::gba
 
     void bus::write_8(const u32& _address, const u8& _data)
     {
-        if (_address >= programData.size())
+        if (write_memory<MEMORY_BIOS_SIZE, MEMORY_BIOS_ADDR>(memoryBIOS, _address, _data))
             return;
-        
-        programData[_address] = _data;
+
+        if (write_memory<MEMORY_BOARD_WRAM_SIZE, MEMORY_BOARD_WRAM_ADDR>(boardWRAM, _address, _data))
+            return;
+
+        if (write_memory<MEMORY_CHIP_WRAM_SIZE, MEMORY_CHIP_WRAM_ADDR>(chipWRAM, _address, _data))
+            return;
+
+        if (write_memory<MEMORY_IO_REGISTERS_SIZE, MEMORY_IO_REGISTERS_ADDR>(ioRegisters, _address, _data))
+            return;
+
+        if (write_memory<MEMORY_ROM_TOTAL_SIZE, MEMORY_ROM_0_ADDR>(memoryROM, _address, _data))
+            return;
+
+        if (write_memory<MEMORY_SRAM_SIZE, MEMORY_SRAM_ADDR>(memorySRAM, _address, _data))
+            return;
+    }
+
+    const bool bus::load_bios(const std::string& _filePath)
+    {
+        std::ifstream file(_filePath, std::ios::binary | std::ios::ate);
+        file.unsetf(std::ios::skipws);
+
+        if (!file.good())
+            return false;
+
+        std::streampos fileSize = file.tellg();
+        file.seekg(0, std::ios::beg);
+
+        if (fileSize > MEMORY_BIOS_SIZE)
+            return false;
+
+        file.read(reinterpret_cast<char*>(memoryBIOS.data()), fileSize);
+        file.close();
+
+        return true;
+    }
+
+    const bool bus::load_rom(const std::string& _filePath)
+    {
+        std::ifstream file(_filePath, std::ios::binary | std::ios::ate);
+        file.unsetf(std::ios::skipws);
+
+        if (!file.good())
+            return false;
+
+        std::streampos fileSize = file.tellg();
+        file.seekg(0, std::ios::beg);
+
+        if (fileSize > MEMORY_ROM_TOTAL_SIZE)
+            return false;
+
+        file.read(reinterpret_cast<char*>(memoryROM.data()), fileSize);
+        file.close();
+
+        return true;
     }
 
     const bool bus::debug_load_program(const std::string& _filePath)
@@ -73,5 +143,15 @@ namespace br::gba
         statusInfo << "Mem [0x" << std::setfill('0') << std::setw(8) << std::hex << _address << "]: 0x";
         statusInfo << std::setfill('0') << std::setw(8) << std::hex << read_32(_address) << "\n";
         return statusInfo.str();
+    }
+
+    bus::bus()
+    {
+        memoryBIOS.resize(MEMORY_BIOS_SIZE, 0);
+        boardWRAM.resize(MEMORY_BOARD_WRAM_SIZE, 0);
+        chipWRAM.resize(MEMORY_CHIP_WRAM_SIZE, 0);
+        ioRegisters.resize(MEMORY_IO_REGISTERS_SIZE, 0);
+        memoryROM.resize(MEMORY_ROM_TOTAL_SIZE, 0);
+        memorySRAM.resize(MEMORY_SRAM_SIZE, 0);
     }
 }
