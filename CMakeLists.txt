@@ -13,6 +13,9 @@ add_library(brgbacore
 )
 add_executable(brgbatest
     core_test/src/main.cpp
+    core_test/src/cpu_test.cpp
+
+    core_test/include/cpu_test.h
 )
 target_link_libraries(
     brgbatest brgbacore

@@ -184,6 +184,11 @@ namespace br::gba
         return 0;
     }
 
+    const u32 cpu::debug_get_register(const u32& _index)
+    {
+        return get_register(_index);
+    }
+
     u32& cpu::get_register(const u32& _index, const bool& _forceUser)
     {
         cpu_mode mode = get_current_mode();

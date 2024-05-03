@@ -69,6 +69,8 @@ namespace br::gba
 
         const std::string debug_print_status_registers();
 
+        const u32 debug_get_register(const u32& _index);
+
     private:
         /// @brief decode 32-bit arm instruction
         /// @return cycle count
