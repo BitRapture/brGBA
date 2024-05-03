@@ -16,4 +16,4 @@ _fibonacci_loop:
     bne _fibonacci_loop
 
 _done:
-    mov r4, #0x200
+    mov r7, #200
